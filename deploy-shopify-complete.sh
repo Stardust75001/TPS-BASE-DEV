@@ -20,7 +20,7 @@ if [ $? -ne 0 ]; then
     echo "⚠️ Authentification Shopify requise"
     echo "🔑 Lancement authentification..."
     shopify auth login
-    
+
     if [ $? -ne 0 ]; then
         echo "❌ Échec authentification Shopify"
         exit 1
@@ -54,12 +54,12 @@ if [[ $deploy_dev =~ ^[Yy]$ ]]; then
     echo ""
     echo "🔧 DÉPLOIEMENT DEV EN COURS..."
     echo "──────────────────────────────"
-    
+
     shopify theme push --unpublished --theme="$DEV_THEME_NAME"
-    
+
     if [ $? -eq 0 ]; then
         echo "✅ Déploiement DEV réussi: $DEV_THEME_NAME"
-        
+
         # Obtenir l'URL de preview
         DEV_URL=$(shopify theme list --json 2>/dev/null | grep -A5 "$DEV_THEME_NAME" | grep "preview_url" | cut -d'"' -f4)
         if [ -n "$DEV_URL" ]; then
@@ -83,16 +83,16 @@ if [[ $deploy_live =~ ^[Yy]$ ]]; then
     echo "Ceci va créer un nouveau thème sur le site LIVE."
     echo "Vous devrez le publier manuellement via l'admin Shopify."
     echo ""
-    
+
     read -p "Confirmer déploiement LIVE? (tapez 'CONFIRM'): " confirm_live
-    
+
     if [ "$confirm_live" = "CONFIRM" ]; then
         echo ""
         echo "🚀 DÉPLOIEMENT LIVE EN COURS..."
         echo "─────────────────────────────────"
-        
+
         shopify theme push --unpublished --theme="$LIVE_THEME_NAME"
-        
+
         if [ $? -eq 0 ]; then
             echo "✅ Déploiement LIVE réussi: $LIVE_THEME_NAME"
             echo ""

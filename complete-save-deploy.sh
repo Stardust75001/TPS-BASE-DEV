@@ -18,11 +18,11 @@ git status --porcelain > /tmp/git_status.txt
 if [ -s /tmp/git_status.txt ]; then
     echo "📝 Changements détectés:"
     cat /tmp/git_status.txt | head -10
-    
+
     if [ $(wc -l < /tmp/git_status.txt) -gt 10 ]; then
         echo "... et $(($(wc -l < /tmp/git_status.txt) - 10)) autres fichiers"
     fi
-    
+
     HAS_CHANGES=true
 else
     echo "✅ Aucun changement Git détecté"
@@ -43,11 +43,11 @@ echo "────────────────────────�
 # ÉTAPE 1: Git Commit et Push
 if [ "$HAS_CHANGES" = true ]; then
     echo "📝 ÉTAPE 1: Sauvegarde Git..."
-    
+
     # Ajouter tous les fichiers
     echo "   ├── Ajout fichiers modifiés..."
     git add -A
-    
+
     # Créer commit avec timestamp
     COMMIT_MSG="💾 Sauvegarde automatique $(date '+%Y-%m-%d %H:%M')
 
@@ -58,16 +58,16 @@ if [ "$HAS_CHANGES" = true ]; then
 - Tests validation améliorés
 
 📊 Expert Shopify System - Auto-save"
-    
+
     echo "   ├── Création commit..."
     git commit -m "$COMMIT_MSG"
-    
+
     if [ $? -eq 0 ]; then
         echo "   ├── ✅ Commit créé"
-        
+
         echo "   └── Push GitHub..."
         git push
-        
+
         if [ $? -eq 0 ]; then
             echo "   └── ✅ Push GitHub réussi"
             GIT_SUCCESS=true
@@ -92,22 +92,22 @@ read -p "Déployer vers Shopify DEV? (y/N): " deploy_dev_choice
 
 if [[ $deploy_dev_choice =~ ^[Yy]$ ]]; then
     echo "   ├── Vérification authentification..."
-    
+
     # Vérifier auth Shopify
     shopify auth whoami > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "   ├── Authentification Shopify..."
         shopify auth login
     fi
-    
+
     if [ $? -eq 0 ]; then
         echo "   ├── ✅ Authentification OK"
-        
+
         DEV_THEME="TPS-DEV-$(date +%m%d-%H%M)"
         echo "   ├── Déploiement theme: $DEV_THEME"
-        
+
         shopify theme push --unpublished --theme="$DEV_THEME"
-        
+
         if [ $? -eq 0 ]; then
             echo "   └── ✅ Déploiement DEV réussi: $DEV_THEME"
             DEV_SUCCESS=true
@@ -136,15 +136,15 @@ if [[ $deploy_live_choice =~ ^[Yy]$ ]]; then
     echo "Ceci créera un nouveau thème sur le site LIVE."
     echo "Vous devrez le publier manuellement via l'admin."
     echo ""
-    
+
     read -p "Confirmer PRODUCTION (tapez 'CONFIRM'): " confirm_prod
-    
+
     if [ "$confirm_prod" = "CONFIRM" ]; then
         LIVE_THEME="TPS-LIVE-$(date +%m%d-%H%M)"
         echo "   ├── Déploiement LIVE: $LIVE_THEME"
-        
+
         shopify theme push --unpublished --theme="$LIVE_THEME"
-        
+
         if [ $? -eq 0 ]; then
             echo "   └── ✅ Déploiement LIVE réussi: $LIVE_THEME"
             echo ""

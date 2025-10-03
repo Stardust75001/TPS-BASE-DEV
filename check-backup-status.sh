@@ -51,14 +51,14 @@ echo "🛒 2. STATUT SHOPIFY:"
 if shopify auth whoami > /dev/null 2>&1; then
     echo "   ├── ✅ Authentification Shopify OK"
     SHOPIFY_AUTH=true
-    
+
     # Lister les thèmes récents
     echo "   ├── 🎨 Thèmes récents déployés:"
     shopify theme list --json 2>/dev/null | grep -o '"name":"[^"]*TPS[^"]*"' | head -3 | while read theme; do
         theme_name=$(echo "$theme" | cut -d'"' -f4)
         echo "   │   └── $theme_name"
     done
-    
+
 else
     echo "   ├── ❌ Authentification Shopify manquante"
     SHOPIFY_AUTH=false

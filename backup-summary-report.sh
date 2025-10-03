@@ -18,7 +18,7 @@ echo ""
 echo "🔗 1. GITHUB - Repository Principal"
 echo "───────────────────────────────────"
 echo "✅ Repository: TPS-BASE-DEV"
-echo "✅ Owner: Stardust75001" 
+echo "✅ Owner: Stardust75001"
 echo "✅ Branche: main"
 
 # Derniers commits
@@ -70,14 +70,14 @@ fi
 # Vérifier auth Shopify
 if shopify auth whoami > /dev/null 2>&1; then
     echo "✅ Authentification Shopify: Active"
-    
+
     # Lister thèmes récents (si auth OK)
     echo "🎨 Thèmes déployés récents:"
     shopify theme list --json 2>/dev/null | grep -o '"name":"[^"]*TPS[^"]*"' | head -5 | while read theme; do
         theme_name=$(echo "$theme" | cut -d'"' -f4)
         echo "   └── $theme_name"
     done
-    
+
     SHOPIFY_READY="✅ Prêt pour déploiement"
 else
     echo "⚠️ Authentification Shopify: Requise"
