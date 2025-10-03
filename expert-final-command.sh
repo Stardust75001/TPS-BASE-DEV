@@ -153,8 +153,6 @@ case $choice in
         done
         ;;
 
-    ;;
-
     5)
         echo "🚀 AUTOMATION SHOPIFY:"
         echo "━━━━━━━━━━━━━━━━━━━━━━"
