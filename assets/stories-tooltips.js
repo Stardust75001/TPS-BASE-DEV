@@ -12,7 +12,7 @@ function debug(...args) {  tooltip.style.top = "-45px"; // Au-dessus de l'icône
 
   if (typeof isDev !== 'undefined' && isDev) {  tooltip.style.transform = "translateX(-50%)";
 
-    console.debug('[Stories Tooltip]', ...args);  
+    console.debug('[Stories Tooltip]', ...args);
 
   }  // Vérification débordement écran
 
@@ -20,7 +20,7 @@ function debug(...args) {  tooltip.style.top = "-45px"; // Au-dessus de l'icône
 
   const viewportWidth = window.innerWidth;
 
-document.addEventListener("DOMContentLoaded", function () {  
+document.addEventListener("DOMContentLoaded", function () {
 
   const isMobile = window.matchMedia("(hover: none)").matches;  // Ajustement si débordement à droite
 
@@ -146,7 +146,7 @@ function adjustTooltipPosition(tooltip) {          debug("1er tap on", link);
 
   tooltip.style.right = "auto";          });
 
-  
+
 
   // Vérifier débordement après rendu          tooltip.classList.add("tap-visible");
 
