@@ -6,7 +6,7 @@ echo "🎯 EXPERT SHOPIFY - RAPPORT FINAL COMPLET"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
-# Analyse TPS BASE DEV  
+# Analyse TPS BASE DEV
 echo "📊 REPOSITORY: TPS BASE DEV (Principal)"
 echo "────────────────────────────────────────────────────────────────"
 cd "/Users/asc/Shopify/TPS BASE DEV"
@@ -19,7 +19,7 @@ THEME_AUTHOR=$(grep '"theme_author"' config/settings_schema.json | cut -d'"' -f4
 
 echo "🌿 Branche actuelle: $CURRENT_BRANCH"
 echo "🎨 Thème: $THEME_NAME"
-echo "📊 Version: $THEME_VERSION"  
+echo "📊 Version: $THEME_VERSION"
 echo "👤 Auteur: $THEME_AUTHOR"
 echo "📝 Modifications: $UNCOMMITTED"
 
@@ -32,7 +32,7 @@ if git show-ref --verify --quiet refs/heads/development; then
     echo "🧪 Development: $DEV_THEME v$DEV_VERSION"
     git checkout -q main 2>/dev/null
     git stash pop -q 2>/dev/null || true
-    
+
     if [ "$THEME_NAME" = "$DEV_THEME" ]; then
         echo "✅ COHÉRENCE: Thème identique sur main et development"
     else
@@ -43,7 +43,7 @@ fi
 echo ""
 
 # Analyse TPS-BASE-316
-echo "📊 REPOSITORY: TPS-BASE-316 (Configuration)" 
+echo "📊 REPOSITORY: TPS-BASE-316 (Configuration)"
 echo "────────────────────────────────────────────────────────────────"
 cd "/Users/asc/Shopify/TPS-BASE-316"
 
@@ -70,7 +70,7 @@ cd "/Users/asc/Shopify/TPS BASE DEV"
 SECRETS_DEV=$(find . -name "*.liquid" -o -name "*.js" | xargs grep -l "sk_live_\|pk_live_\|AIza[A-Za-z0-9]\{35\}\|ghp_\|gho_" 2>/dev/null | wc -l | tr -d ' ')
 echo "🛡️ TPS BASE DEV: $SECRETS_DEV secret(s)"
 
-# TPS-BASE-316  
+# TPS-BASE-316
 cd "/Users/asc/Shopify/TPS-BASE-316"
 SECRETS_316=$(find . -name "*.liquid" -o -name "*.js" | xargs grep -l "sk_live_\|pk_live_\|AIza[A-Za-z0-9]\{35\}\|ghp_\|gho_" 2>/dev/null | wc -l | tr -d ' ')
 echo "🛡️ TPS-BASE-316: $SECRETS_316 secret(s)"
@@ -93,7 +93,7 @@ echo "────────────────────────�
 
 cd "/Users/asc/Shopify/TPS BASE DEV"
 IMG_NO_DIM=$(grep -r "<img" --include="*.liquid" . | grep -v -E "width=|height=" | wc -l | tr -d ' ')
-CONSOLE_LOGS=$(grep -r "console\." --include="*.liquid" . | wc -l | tr -d ' ') 
+CONSOLE_LOGS=$(grep -r "console\." --include="*.liquid" . | wc -l | tr -d ' ')
 DEPRECATED_FILTERS=$(find . -name "*.liquid" -exec grep -l "img_url" {} \; | wc -l | tr -d ' ')
 
 echo "🖼️ Images sans dimensions: $IMG_NO_DIM"
@@ -115,7 +115,7 @@ echo "🎯 RÉSUMÉ FINAL EXPERT SHOPIFY"
 echo "═══════════════════════════════════════════════════════════════"
 echo "📁 Repositories: 2 analysés"
 echo "🎨 Thème principal: $THEME_NAME v$THEME_VERSION"
-echo "🔒 Sécurité: $SECURITY_STATUS"  
+echo "🔒 Sécurité: $SECURITY_STATUS"
 echo "⚡ Performance: $PERF_SCORE/100"
 echo "📝 Modifications totales: $((UNCOMMITTED + UNCOMMITTED_316))"
 
@@ -124,7 +124,7 @@ echo "🚀 STATUT EXPERT:"
 if [ $TOTAL_SECRETS -eq 0 ] && [ $PERF_SCORE -ge 80 ]; then
     echo "🏆 EXCELLENT - Production Ready Enterprise Level"
     echo "✅ Sécurité parfaite"
-    echo "✅ Performance optimale"  
+    echo "✅ Performance optimale"
     echo "✅ Thèmes cohérents"
     echo "✅ Automatisation déployée"
 elif [ $TOTAL_SECRETS -eq 0 ]; then

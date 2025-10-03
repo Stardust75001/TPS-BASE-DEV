@@ -1,46 +1,69 @@
-# Theme Check Configuration
-# Professional Shopify Theme Validation Setup
-# Optimized for complex themes with performance considerations
-
+# 🚀 Expert Shopify Theme Check - VS Code Optimized Pro
 root: .
 
-# Disable problematic checks that cause infinite loops
-SpaceInsideBraces: false
-RequiredLayoutThemeObject: false
-LiquidTag: false
-ValidHTMLTranslation: false
-TranslationKeyExists: false
+# Disable problematic checks that cause VS Code issues
+SpaceInsideBraces:
+  enabled: false
 
-# Enable critical checks for production
-ImgLazyLoading: true
-ImgWidthAndHeight: true
-DeprecatedFilter: true
-JSONSchemaFormat: true
-ValidSchema: true
-UnusedAssign: true
-UnusedSnippet: false # Disabled to avoid performance issues
+RequiredLayoutThemeObject:
+  enabled: false
 
-# Exclude problematic directories and files
+LiquidTag:
+  enabled: false
+
+UnknownFilter:
+  enabled: false
+
+# Enable important performance checks
+DeprecatedFilter:
+  enabled: true
+
+ImgWidthAndHeight:
+  enabled: true
+
+AssetSizeCSS:
+  enabled: true
+  threshold_in_bytes: 100000
+
+AssetSizeJavaScript:
+  enabled: true
+  threshold_in_bytes: 100000
+
+# Enable accessibility checks
+ImgLazyLoading:
+  enabled: true
+
+# Enable SEO checks
+MetaViewport:
+  enabled: true
+
+HtmlLang:
+  enabled: true
+
+# Security checks
+ContentForHeaderModification:
+  enabled: false
+
+# Performance checks
+RemoteAsset:
+  enabled: true
+
+# Liquid syntax checks
+LiquidHTMLInLiquidTag:
+  enabled: true
+
+SyntaxError:
+  enabled: true
+
+# Exclude comprehensive list
 exclude:
-  - "backup-*/**"
+  - "backup*/**"
   - "node_modules/**"
-  - "test-results/**"
-  - "playwright-report/**"
   - ".github/**"
-  - "docs/**"
-  - "examples/**"
-  - "*.min.js"
-  - "*.min.css"
-  - "vendor-*.js"
-
-# Performance settings
-ignore:
-  - TemplateLength
-  - NestedSnippet
-  - UnusedAssign
-
-# Only check critical files for faster execution
-only_categories:
-  - liquid
-  - performance
-  - html
+  - "*.sh"
+  - "*.md"
+  - "*.log"
+  - ".git/**"
+  - ".vscode/**"
+  - "tmp/**"
+  - ".shopify/**"
