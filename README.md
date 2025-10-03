@@ -2,9 +2,9 @@
 
 ## 🚀 Thème Shopify de Développement - The Pet Society
 
-**Version :** DEV 1.0.0  
-**Basé sur :** Shopiweb Premium v1.6.0  
-**Créé le :** 3 octobre 2025  
+**Version :** DEV 1.0.0
+**Basé sur :** Shopiweb Premium v1.6.0
+**Créé le :** 3 octobre 2025
 **Statut :** 🔧 En développement actif
 
 ---
