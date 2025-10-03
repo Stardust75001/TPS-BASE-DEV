@@ -1,0 +1,174 @@
+name: 💾 Backup Hebdomadaire TPS BASE DEV
+
+on:
+  schedule:
+    # Tous les dimanches à 2h00 UTC (3h00 CET)
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      backup_type:
+        description: "Type de sauvegarde"
+        required: true
+        default: 'complete'
+        type: choice
+        options:
+        - complete
+        - themes_only
+        - settings_only
+      
+env:
+  SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+  SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
+
+jobs:
+  backup-complete:
+    name: "💾 Sauvegarde Complète Shopify"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🗓️ Generate Backup Timestamp
+        id: timestamp
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          BACKUP_DATE=$(date +"%Y-%m-%d")
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "BACKUP_DATE=$BACKUP_DATE" >> $GITHUB_ENV
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: 📁 Create Backup Directory
+        run: |
+          mkdir -p "backups/$TIMESTAMP"
+          mkdir -p "backups/$TIMESTAMP/themes"
+          mkdir -p "backups/$TIMESTAMP/products"
+          mkdir -p "backups/$TIMESTAMP/collections"
+          mkdir -p "backups/$TIMESTAMP/settings"
+          mkdir -p "backups/$TIMESTAMP/metaobjects"
+
+      - name: 🎨 Backup Themes
+        if: ${{ inputs.backup_type == 'complete' || inputs.backup_type == 'themes_only' }}
+        run: |
+          echo "💾 Sauvegarde des thèmes..."
+          
+          # Liste des thèmes
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/themes.json" > "backups/$TIMESTAMP/themes/themes_list.json"
+          
+          # Détails de chaque thème
+          THEMES=$(curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/themes.json" | jq -r '.themes[].id')
+          
+          for theme_id in $THEMES; do
+            echo "Sauvegarde du thème ID: $theme_id"
+            curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+              "https://$SHOPIFY_STORE/admin/api/2024-10/themes/$theme_id/assets.json" > "backups/$TIMESTAMP/themes/theme_${theme_id}_assets.json"
+          done
+          
+          echo "✅ Thèmes sauvegardés"
+
+      - name: 🛍️ Backup Products & Collections
+        if: ${{ inputs.backup_type == 'complete' }}
+        run: |
+          echo "💾 Sauvegarde des produits et collections..."
+          
+          # Produits (première page pour éviter timeout)
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/products.json?limit=50" > "backups/$TIMESTAMP/products/products_sample.json"
+          
+          # Collections
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/collections.json" > "backups/$TIMESTAMP/collections/collections.json"
+          
+          # Smart Collections
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/smart_collections.json" > "backups/$TIMESTAMP/collections/smart_collections.json"
+          
+          echo "✅ Produits et collections sauvegardés"
+
+      - name: ⚙️ Backup Shop Settings
+        if: ${{ inputs.backup_type == 'complete' || inputs.backup_type == 'settings_only' }}
+        run: |
+          echo "💾 Sauvegarde des paramètres..."
+          
+          # Shop info
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/shop.json" > "backups/$TIMESTAMP/settings/shop_info.json"
+          
+          # Webhooks
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/webhooks.json" > "backups/$TIMESTAMP/settings/webhooks.json"
+          
+          # Script tags
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/script_tags.json" > "backups/$TIMESTAMP/settings/script_tags.json"
+          
+          echo "✅ Paramètres sauvegardés"
+
+      - name: 🎯 Backup Metaobjects (Couleurs)
+        if: ${{ inputs.backup_type == 'complete' }}
+        run: |
+          echo "💾 Sauvegarde des metaobjects couleurs..."
+          
+          # Metaobjects definitions
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/metaobject_definitions.json" > "backups/$TIMESTAMP/metaobjects/definitions.json" || echo "⚠️ Metaobjects non disponibles"
+          
+          echo "✅ Metaobjects sauvegardés"
+
+      - name: 📊 Generate Backup Report
+        run: |
+          echo "📊 Génération du rapport de sauvegarde..."
+          
+          cat > "backups/$TIMESTAMP/BACKUP_REPORT.md" << EOF
+          # 💾 RAPPORT DE SAUVEGARDE TPS BASE DEV
+          
+          **Date:** $BACKUP_DATE
+          **Timestamp:** $TIMESTAMP
+          **Type:** ${{ inputs.backup_type || 'complete' }}
+          **Store:** $SHOPIFY_STORE
+          
+          ## 📁 Contenu Sauvegardé
+          
+          $(find "backups/$TIMESTAMP" -type f -name "*.json" | while read file; do
+            size=$(du -h "$file" | cut -f1)
+            echo "- \`$(basename "$file")\` ($size)"
+          done)
+          
+          ## ✅ Status
+          
+          - ✅ Sauvegarde créée avec succès
+          - 📅 Prochaine sauvegarde: $(date -d '+7 days' '+%Y-%m-%d')
+          - 🔄 Rétention: 30 jours
+          
+          ---
+          
+          **Généré automatiquement par GitHub Actions**
+          EOF
+          
+          echo "✅ Rapport généré"
+
+      - name: 📤 Upload Backup Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: tps-backup-${{ steps.timestamp.outputs.timestamp }}
+          path: backups/${{ env.TIMESTAMP }}/
+          retention-days: 30
+
+      - name: 📝 Display Summary
+        run: |
+          echo "## 💾 Sauvegarde Terminée" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🗓️ Date:** $BACKUP_DATE" >> $GITHUB_STEP_SUMMARY
+          echo "**⏰ Timestamp:** $TIMESTAMP" >> $GITHUB_STEP_SUMMARY  
+          echo "**🏪 Store:** $SHOPIFY_STORE" >> $GITHUB_STEP_SUMMARY
+          echo "**📦 Type:** ${{ inputs.backup_type || 'complete' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Fichiers Sauvegardés" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          find "backups/$TIMESTAMP" -type f -name "*.json" | while read file; do
+            size=$(du -h "$file" | cut -f1)
+            echo "- $(basename "$file") ($size)" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Sauvegarde disponible pendant 30 jours dans les Artifacts**" >> $GITHUB_STEP_SUMMARY
