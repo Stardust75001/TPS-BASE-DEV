@@ -1,0 +1,311 @@
+{% comment %}
+  🚀 ANALYTICS CONFIGURATION MANAGER - PROFESSIONAL EDITION
+  ========================================================
+
+  Système de configuration centralisée pour tous les services analytics.
+  Développé par Expert Shopify - Compatible GDPR - Optimisé Performance
+
+  Services supportés:
+  - Google Tag Manager & Analytics 4
+  - Meta/Facebook Pixel + Conversions API
+  - Sentry Error Monitoring + Performance
+  - Cloudflare Turnstile Anti-Bot
+  - Multi-platform Social Pixels
+  - Advanced E-commerce Tracking
+
+  Version: 2.0.0 | Créé: 3 octobre 2025
+{% endcomment %}
+
+{% liquid
+  # Configuration depuis les variables d'environnement (injectées par analytics-env-injector)
+  assign env_config = window.analyticsEnvConfig
+
+  # Fallback vers les settings du thème si pas d'env config
+  assign gtm_id = env_config.gtm_id | default: settings.gtm_id
+  assign ga4_id = env_config.ga4_id | default: settings.ga4_id
+  assign google_verification = env_config.google_site_verification | default: settings.google_site_verification
+  assign ahrefs_verification = env_config.ahrefs_site_verification | default: settings.ahrefs_site_verification
+  assign facebook_pixel = env_config.facebook_pixel_id | default: settings.facebook_pixel_id
+  assign turnstile_key = env_config.turnstile_site_key | default: settings.turnstile_site_key
+  assign turnstile_enabled = env_config.turnstile_enabled | default: settings.turnstile_enabled
+  assign sentry_dsn = env_config.sentry_dsn | default: settings.sentry_dsn
+  assign hotjar_id = env_config.hotjar_id | default: settings.hotjar_id
+  assign pinterest_tag = env_config.pinterest_tag_id | default: settings.pinterest_tag_id
+  assign tiktok_pixel = env_config.tiktok_pixel_id | default: settings.tiktok_pixel_id
+
+  # Configuration de performance et debug
+  assign debug_mode = env_config.analytics_debug | default: settings.analytics_debug_mode | default: false
+  assign performance_monitoring = settings.performance_monitoring | default: true
+  assign gdpr_compliance = settings.gdpr_compliance | default: true
+  assign load_strategy = settings.analytics_load_strategy | default: 'lazy'
+%}
+
+<script>
+  /**
+   * 🚀 ANALYTICS CONFIG MANAGER - PROFESSIONAL EDITION
+   * Configuration centralisée et sécurisée pour tous les services analytics
+   */
+  window.analyticsConfig = {
+    // === CONFIGURATION PRINCIPALE ===
+    version: '2.0.0',
+    initialized: false,
+    debug: {{ debug_mode | json }},
+    gdprCompliance: {{ gdpr_compliance | json }},
+    performanceMonitoring: {{ performance_monitoring | json }},
+    loadStrategy: {{ load_strategy | json }},
+
+    // === SERVICES ANALYTICS ===
+    services: {
+      gtm: {
+        id: {{ gtm_id | json }},
+        enabled: {{ gtm_id | size | json }} > 0,
+        loaded: false,
+        name: 'Google Tag Manager'
+      },
+      ga4: {
+        id: {{ ga4_id | json }},
+        enabled: {{ ga4_id | size | json }} > 0,
+        loaded: false,
+        enhancedEcommerce: {{ settings.ga4_enhanced_ecommerce | default: true | json }},
+        name: 'Google Analytics 4'
+      },
+      facebook: {
+        id: {{ facebook_pixel | json }},
+        enabled: {{ facebook_pixel | size | json }} > 0,
+        loaded: false,
+        name: 'Meta/Facebook Pixel'
+      },
+      sentry: {
+        dsn: {{ sentry_dsn | json }},
+        enabled: {{ sentry_dsn | size | json }} > 0,
+        loaded: false,
+        environment: {{ settings.sentry_environment | default: 'production' | json }},
+        sampleRate: {{ settings.sentry_sample_rate | default: 100 | divided_by: 100.0 | json }},
+        name: 'Sentry Error Monitoring'
+      },
+      turnstile: {
+        siteKey: {{ turnstile_key | json }},
+        enabled: {{ turnstile_enabled | json }},
+        theme: {{ settings.turnstile_theme | default: 'light' | json }},
+        size: {{ settings.turnstile_size | default: 'normal' | json }},
+        name: 'Cloudflare Turnstile'
+      },
+      hotjar: {
+        id: {{ hotjar_id | json }},
+        enabled: {{ hotjar_id | size | json }} > 0,
+        loaded: false,
+        name: 'Hotjar Heatmaps'
+      },
+      pinterest: {
+        id: {{ pinterest_tag | json }},
+        enabled: {{ pinterest_tag | size | json }} > 0,
+        loaded: false,
+        name: 'Pinterest Tag'
+      },
+      tiktok: {
+        id: {{ tiktok_pixel | json }},
+        enabled: {{ tiktok_pixel | size | json }} > 0,
+        loaded: false,
+        name: 'TikTok Pixel'
+      }
+    },
+
+    // === WEBMASTER TOOLS ===
+    verification: {
+      google: {{ google_verification | json }},
+      ahrefs: {{ ahrefs_verification | json }},
+      bing: {{ settings.bing_site_verification | json }}
+    },
+
+    // === SHOPIFY DATA LAYER ===
+    shopify: {
+      shop: {{ shop.permanent_domain | json }},
+      currency: {{ cart.currency.iso_code | json }},
+      customer: {
+        id: {% if customer %}{{ customer.id | json }}{% else %}null{% endif %},
+        email: {% if customer %}{{ customer.email | json }}{% else %}null{% endif %},
+        tags: {% if customer %}{{ customer.tags | json }}{% else %}[]{% endif %}
+      },
+      cart: {
+        id: {{ cart.id | json }},
+        itemCount: {{ cart.item_count | json }},
+        totalPrice: {{ cart.total_price | money_without_currency | json }}
+      },
+      page: {
+        type: {{ request.page_type | json }},
+        handle: {% if product %}{{ product.handle | json }}{% elsif collection %}{{ collection.handle | json }}{% elsif blog %}{{ blog.handle | json }}{% else %}null{% endif %},
+        id: {% if product %}{{ product.id | json }}{% elsif collection %}{{ collection.id | json }}{% elsif blog %}{{ blog.id | json }}{% else %}null{% endif %}
+      }
+    },
+
+    // === MÉTHODES UTILITAIRES ===
+    log: function(...args) {
+      if (this.debug && typeof console !== 'undefined') {
+        console.log('[Analytics Config]', ...args);
+      }
+    },
+
+    error: function(...args) {
+      if (typeof console !== 'undefined') {
+        console.error('[Analytics Config ERROR]', ...args);
+      }
+      // Reporter à Sentry si disponible
+      if (this.services.sentry.enabled && typeof Sentry !== 'undefined') {
+        Sentry.captureException(new Error(args.join(' ')));
+      }
+    },
+
+    getService: function(serviceName) {
+      return this.services[serviceName] || null;
+    },
+
+    isServiceEnabled: function(serviceName) {
+      const service = this.getService(serviceName);
+      return service && service.enabled;
+    },
+
+    markServiceLoaded: function(serviceName) {
+      const service = this.getService(serviceName);
+      if (service) {
+        service.loaded = true;
+        this.log(`Service loaded: ${service.name}`);
+      }
+    },
+
+    // === PERFORMANCE MONITORING ===
+    performance: {
+      startTime: performance.now(),
+      marks: {},
+
+      mark: function(name) {
+        if (window.analyticsConfig.performanceMonitoring) {
+          this.marks[name] = performance.now();
+          performance.mark(`analytics-${name}`);
+        }
+      },
+
+      measure: function(name, startMark) {
+        if (window.analyticsConfig.performanceMonitoring && this.marks[startMark]) {
+          const duration = performance.now() - this.marks[startMark];
+          performance.measure(`analytics-${name}`, `analytics-${startMark}`);
+          window.analyticsConfig.log(`Performance: ${name} took ${duration.toFixed(2)}ms`);
+          return duration;
+        }
+        return 0;
+      }
+    },
+
+    // === INITIALISATION ===
+    init: function() {
+      if (this.initialized) return;
+
+      this.performance.mark('config-init');
+      this.log('Analytics Configuration Manager v2.0.0 initialized');
+      this.log('Enabled services:', Object.keys(this.services).filter(s => this.services[s].enabled));
+      this.log('Shopify data:', this.shopify);
+
+      // Exposer globalement pour les autres scripts
+      window.shopifyAnalytics = this.shopify;
+
+      this.initialized = true;
+      this.performance.measure('config-ready', 'config-init');
+
+      // Déclencher événement personnalisé
+      if (typeof CustomEvent !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('analyticsConfigReady', {
+          detail: { config: this }
+        }));
+      }
+    }
+  };
+
+  // Auto-initialisation
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      window.analyticsConfig.init();
+    });
+  } else {
+    window.analyticsConfig.init();
+  }
+</script>
+
+{% comment %}
+  🔍 META TAGS DE VÉRIFICATION WEBMASTER TOOLS
+  Injectés automatiquement si les codes de vérification sont configurés
+{% endcomment %}
+
+{% if google_verification != blank %}
+  <meta name="google-site-verification" content="{{ google_verification }}">
+{% endif %}
+
+{% if ahrefs_verification != blank %}
+  <meta name="ahrefs-site-verification" content="{{ ahrefs_verification }}">
+{% endif %}
+
+{% if settings.bing_site_verification != blank %}
+  <meta name="msvalidate.01" content="{{ settings.bing_site_verification }}">
+{% endif %}
+
+{% comment %}
+  📊 META TAGS ANALYTICS POUR DISCOVERY
+  Facilitent la détection des IDs analytics par les outils externes
+{% endcomment %}
+
+{% if gtm_id != blank %}
+  <meta name="gtm-container-id" content="{{ gtm_id }}">
+{% endif %}
+
+{% if ga4_id != blank %}
+  <meta name="ga4-measurement-id" content="{{ ga4_id }}">
+{% endif %}
+
+{% if facebook_pixel != blank %}
+  <meta name="facebook-pixel-id" content="{{ facebook_pixel }}">
+{% endif %}
+
+{% if turnstile_key != blank %}
+  <meta name="turnstile-site-key" content="{{ turnstile_key }}">
+{% endif %}
+
+{% if sentry_dsn != blank %}
+  <meta name="sentry-enabled" content="true">
+{% endif %}
+
+{% comment %}
+  🎯 STRUCTURED DATA POUR ANALYTICS
+  Données structurées pour améliorer le tracking
+{% endcomment %}
+
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": {{ shop.name | json }},
+    "url": {{ shop.url | json }},
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {{ shop.url | append: '/search?q={search_term_string}' | json }},
+      "query-input": "required name=search_term_string"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": {{ shop.name | json }},
+      "url": {{ shop.url | json }}
+    }
+  }
+</script>
+
+{% if debug_mode %}
+  {% comment %}🐛 DEBUG MODE: Afficher la configuration dans la console{% endcomment %}
+  <script>
+    console.group('🚀 Analytics Configuration Debug');
+    console.log('Configuration complète:', window.analyticsConfig);
+    console.log(
+      'Services activés:',
+      Object.keys(window.analyticsConfig.services).filter((s) => window.analyticsConfig.services[s].enabled)
+    );
+    console.log('Mode GDPR:', window.analyticsConfig.gdprCompliance);
+    console.log('Stratégie de chargement:', window.analyticsConfig.loadStrategy);
+    console.groupEnd();
+  </script>
+{% endif %}

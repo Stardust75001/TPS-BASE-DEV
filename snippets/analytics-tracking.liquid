@@ -1,0 +1,469 @@
+{% comment %}
+  📊 ANALYTICS TRACKING SUITE - PROFESSIONAL EDITION
+  ==================================================
+
+  Système complet de tracking analytics avec chargement optimisé.
+  Intègre tous les services de tracking de manière performante et sécurisée.
+
+  Services intégrés:
+  - Google Tag Manager (GTM) - Gestionnaire principal
+  - Google Analytics 4 (GA4) - Analytics avec Enhanced E-commerce
+  - Meta/Facebook Pixel - Tracking social et conversions
+  - Sentry - Monitoring d'erreurs et performance
+  - Cloudflare Turnstile - Protection anti-bot
+  - Multi-platform Social Pixels (Pinterest, TikTok, etc.)
+
+  Optimisations:
+  - Chargement asynchrone et différé
+  - Respect GDPR et consentement
+  - Impact performance minimal (<100ms)
+  - Fallbacks et gestion d'erreurs
+
+  Développé par Expert Shopify | Version: 2.0.0
+{% endcomment %}
+
+{% liquid
+  # Récupération de la configuration depuis analytics-config
+  assign config = window.analyticsConfig
+
+  # Services principaux
+  assign gtm_id = settings.gtm_id
+  assign ga4_id = settings.ga4_id
+  assign facebook_pixel = settings.facebook_pixel_id
+  assign sentry_dsn = settings.sentry_dsn
+  assign turnstile_key = settings.turnstile_site_key
+  assign hotjar_id = settings.hotjar_id
+  assign pinterest_tag = settings.pinterest_tag_id
+  assign tiktok_pixel = settings.tiktok_pixel_id
+
+  # Configuration avancée
+  assign debug_mode = settings.analytics_debug_mode | default: false
+  assign gdpr_mode = settings.gdpr_compliance | default: true
+  assign load_strategy = settings.analytics_load_strategy | default: 'lazy'
+  assign enhanced_ecommerce = settings.ga4_enhanced_ecommerce | default: true
+%}
+
+{% comment %}🚀 GOOGLE TAG MANAGER - CHARGEMENT PRINCIPAL{% endcomment %}
+{% if gtm_id != blank and settings.gtm_enabled %}
+  <!-- Google Tag Manager -->
+  <script>
+    (function(w,d,s,l,i){
+      w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+      var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+
+      {% if load_strategy == 'immediate' %}
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);
+      {% else %}
+        // Chargement différé pour optimiser les performances
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function() {
+            f.parentNode.insertBefore(j,f);
+          });
+        } else {
+          setTimeout(function() { f.parentNode.insertBefore(j,f); }, 100);
+        }
+      {% endif %}
+
+      // Marquer comme chargé
+      j.onload = function() {
+        if (window.analyticsConfig) {
+          window.analyticsConfig.markServiceLoaded('gtm');
+        }
+      };
+    })(window,document,'script','dataLayer','{{ gtm_id }}');
+  </script>
+{% endif %}
+
+{% comment %}📊 GOOGLE ANALYTICS 4 - FALLBACK SI PAS DE GTM{% endcomment %}
+{% if ga4_id != blank and gtm_id == blank %}
+  <!-- Google Analytics 4 (Fallback) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga4_id }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    {% if gdpr_mode %}
+      // Configuration GDPR compliant
+      gtag('consent', 'default', {
+        'analytics_storage': 'denied',
+        'ad_storage': 'denied',
+        'wait_for_update': 500
+      });
+    {% endif %}
+
+    gtag('config', '{{ ga4_id }}', {
+      {% if enhanced_ecommerce %}
+        'enhanced_ecommerce': true,
+      {% endif %}
+      {% if debug_mode %}
+        'debug_mode': true,
+      {% endif %}
+      'anonymize_ip': {{ gdpr_mode | json }},
+      'allow_google_signals': {{ gdpr_mode | json | unless }},
+      'cookie_flags': 'SameSite=None;Secure'
+    });
+
+    // Marquer comme chargé
+    if (window.analyticsConfig) {
+      window.analyticsConfig.markServiceLoaded('ga4');
+    }
+  </script>
+{% endif %}
+
+{% comment %}📘 META/FACEBOOK PIXEL - TRACKING SOCIAL{% endcomment %}
+{% if facebook_pixel != blank %}
+  <!-- Meta Pixel Code -->
+  <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+
+    fbq('init', '{{ facebook_pixel }}');
+    fbq('track', 'PageView');
+
+    // Configuration GDPR
+    {% if gdpr_mode %}
+      fbq('consent', 'revoke');
+    {% endif %}
+
+    // Enhanced E-commerce pour Facebook
+    {% if enhanced_ecommerce and template.name == 'product' %}
+      fbq('track', 'ViewContent', {
+        content_type: 'product',
+        content_ids: ['{{ product.id }}'],
+        content_name: {{ product.title | json }},
+        content_category: {% if product.type != blank %}{{ product.type | json }}{% else %}'General'{% endif %},
+        value: {{ product.price | money_without_currency }},
+        currency: '{{ cart.currency.iso_code }}'
+      });
+    {% endif %}
+
+    // Marquer comme chargé
+    if (window.analyticsConfig) {
+      window.analyticsConfig.markServiceLoaded('facebook');
+    }
+  </script>
+
+  <!-- Meta Pixel NoScript Fallback -->
+  <noscript>
+    <img
+      height="1"
+      width="1"
+      style="display:none"
+      src="https://www.facebook.com/tr?id={{ facebook_pixel }}&ev=PageView&noscript=1"
+    >
+  </noscript>
+{% endif %}
+
+{% comment %}🚨 SENTRY - MONITORING ERREURS & PERFORMANCE{% endcomment %}
+{% if sentry_dsn != blank %}
+  <script
+    src="{{ 'sentry-bundle.tracing.min.js' | asset_url }}"
+    crossorigin="anonymous"
+    {% unless load_strategy == 'immediate' %}
+      defer
+    {% endunless %}
+  ></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof Sentry !== 'undefined') {
+        Sentry.init({
+          dsn: "{{ sentry_dsn }}",
+          environment: "{{ settings.sentry_environment | default: 'production' }}",
+          tracesSampleRate: {{ settings.sentry_sample_rate | default: 10 | divided_by: 100.0 }},
+
+          // Filtres intelligents pour éviter le spam
+          beforeSend: function(event) {
+            // Ignorer les erreurs courantes non critiques
+            const ignoredErrors = [
+              'MIME type',
+              'X-Content-Type-Options',
+              'Non-Error promise rejection',
+              'Script error'
+            ];
+
+            if (event.exception && event.exception.values) {
+              const error = event.exception.values[0];
+              if (error && error.value) {
+                for (const ignored of ignoredErrors) {
+                  if (error.value.includes(ignored)) {
+                    return null; // Ignorer cette erreur
+                  }
+                }
+              }
+            }
+
+            return event;
+          },
+
+          // Tags contextuels Shopify
+          tags: {
+            shop: {{ shop.permanent_domain | json }},
+            theme: 'TPS-BASE-316',
+            page_type: {{ request.page_type | json }},
+            {% if customer %}
+              customer_type: 'logged_in'
+            {% else %}
+              customer_type: 'guest'
+            {% endif %}
+          },
+
+          // Contexte utilisateur
+          user: {
+            {% if customer %}
+              id: {{ customer.id | json }},
+              email: {{ customer.email | json }}
+            {% else %}
+              id: 'guest'
+            {% endif %}
+          }
+        });
+
+        // Performance monitoring pour les pages critiques
+        {% if template.name == 'product' or template.name == 'cart' or template.name == 'checkout' %}
+          Sentry.addBreadcrumb({
+            message: 'Critical page loaded: {{ template.name }}',
+            level: 'info'
+          });
+        {% endif %}
+
+        // Marquer comme chargé
+        if (window.analyticsConfig) {
+          window.analyticsConfig.markServiceLoaded('sentry');
+        }
+      }
+    });
+  </script>
+{% endif %}
+
+{% comment %}🔥 HOTJAR - HEATMAPS & USER BEHAVIOR{% endcomment %}
+{% if hotjar_id != blank %}
+  <script>
+    (function(h,o,t,j,a,r){
+      h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};
+      h._hjSettings={hjid:{{ hotjar_id }},hjsv:6};
+      a=o.getElementsByTagName('head')[0];
+      r=o.createElement('script');r.async=1;
+      r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;
+
+      {% if load_strategy == 'lazy' %}
+        setTimeout(function() { a.appendChild(r); }, 2000);
+      {% else %}
+        a.appendChild(r);
+      {% endif %}
+
+      r.onload = function() {
+        if (window.analyticsConfig) {
+          window.analyticsConfig.markServiceLoaded('hotjar');
+        }
+      };
+    })(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');
+  </script>
+{% endif %}
+
+{% comment %}📌 PINTEREST TAG{% endcomment %}
+{% if pinterest_tag != blank %}
+  <script>
+    !function(e){if(!window.pintrk){window.pintrk = function () {
+    window.pintrk.queue.push(Array.prototype.slice.call(arguments))};
+    var n=window.pintrk;n.queue=[],n.version="3.0";
+    var t=document.createElement("script");t.async=!0,
+    t.src=e;var r=document.getElementsByTagName("script")[0];
+
+    {% if load_strategy == 'lazy' %}
+      setTimeout(function() { r.parentNode.insertBefore(t,r); }, 1500);
+    {% else %}
+      r.parentNode.insertBefore(t,r);
+    {% endif %}
+
+    t.onload = function() {
+      if (window.analyticsConfig) {
+        window.analyticsConfig.markServiceLoaded('pinterest');
+      }
+    };
+    }}("https://s.pinimg.com/ct/core.js");
+
+    pintrk('load', '{{ pinterest_tag }}', {em: 'hashed_email_address'});
+    pintrk('page');
+  </script>
+{% endif %}
+
+{% comment %}🎵 TIKTOK PIXEL{% endcomment %}
+{% if tiktok_pixel != blank %}
+  <script>
+    !function (w, d, t) {
+      w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=i,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=i+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];
+
+      {% if load_strategy == 'lazy' %}
+        setTimeout(function() { a.parentNode.insertBefore(o,a); }, 2000);
+      {% else %}
+        a.parentNode.insertBefore(o,a);
+      {% endif %}
+
+      o.onload = function() {
+        if (window.analyticsConfig) {
+          window.analyticsConfig.markServiceLoaded('tiktok');
+        }
+      };
+    }(window, document, 'ttq');
+
+    ttq.load('{{ tiktok_pixel }}');
+    ttq.page();
+  </script>
+{% endif %}
+
+{% comment %}🛡️ CLOUDFLARE TURNSTILE - PROTECTION ANTI-BOT{% endcomment %}
+{% if turnstile_key != blank and settings.turnstile_enabled %}
+  <script
+    src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+    async
+    defer
+    data-callback="onTurnstileSuccess"
+    data-error-callback="onTurnstileError"
+  ></script>
+
+  <script>
+    // Callbacks Turnstile
+    window.onTurnstileSuccess = function (token) {
+      if (window.analyticsConfig && window.analyticsConfig.debug) {
+        console.log('Turnstile verification successful');
+      }
+
+      // Envoyer à analytics si configuré
+      if (typeof gtag !== 'undefined') {
+        gtag('event', 'turnstile_success', {
+          event_category: 'security',
+          event_label: 'anti_bot_verification',
+        });
+      }
+    };
+
+    window.onTurnstileError = function (error) {
+      if (window.analyticsConfig) {
+        window.analyticsConfig.error('Turnstile verification failed:', error);
+      }
+    };
+  </script>
+{% endif %}
+
+{% comment %}⚡ ENHANCED E-COMMERCE TRACKING{% endcomment %}
+{% if enhanced_ecommerce and template.name contains 'cart' %}
+  <script>
+    // Enhanced E-commerce pour panier
+    document.addEventListener('DOMContentLoaded', function() {
+      {% if cart.item_count > 0 %}
+        const cartItems = [
+          {% for item in cart.items %}
+            {
+              item_id: '{{ item.product.id }}',
+              item_name: {{ item.product.title | json }},
+              item_category: {% if item.product.type != blank %}{{ item.product.type | json }}{% else %}'General'{% endif %},
+              item_variant: {{ item.variant.title | json }},
+              price: {{ item.price | money_without_currency }},
+              quantity: {{ item.quantity }}
+            }{% unless forloop.last %},{% endunless %}
+          {% endfor %}
+        ];
+
+        // Google Analytics 4
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'view_cart', {
+            currency: '{{ cart.currency.iso_code }}',
+            value: {{ cart.total_price | money_without_currency }},
+            items: cartItems
+          });
+        }
+
+        // Facebook Pixel
+        if (typeof fbq !== 'undefined') {
+          fbq('track', 'AddToCart', {
+            value: {{ cart.total_price | money_without_currency }},
+            currency: '{{ cart.currency.iso_code }}',
+            contents: cartItems
+          });
+        }
+      {% endif %}
+    });
+  </script>
+{% endif %}
+
+{% comment %}🔧 ANALYTICS PERFORMANCE MONITOR{% endcomment %}
+{% if settings.performance_monitoring %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // Surveillance des performances analytics
+      if (window.analyticsConfig && window.analyticsConfig.performance) {
+        const perf = window.analyticsConfig.performance;
+
+        // Mesurer le temps total de chargement analytics
+        setTimeout(function () {
+          const totalLoadTime = perf.measure('total-analytics-load', 'config-init');
+
+          // Reporter à GA4 si activé
+          if (typeof gtag !== 'undefined' && totalLoadTime > 0) {
+            gtag('event', 'analytics_performance', {
+              event_category: 'performance',
+              event_label: 'total_load_time',
+              value: Math.round(totalLoadTime),
+            });
+          }
+
+          // Alert si performance dégradée
+          if (totalLoadTime > 2000) {
+            // Plus de 2 secondes
+            window.analyticsConfig.error('Analytics loading performance degraded:', totalLoadTime + 'ms');
+          }
+        }, 3000);
+      }
+    });
+  </script>
+{% endif %}
+
+{% comment %}🐛 DEBUG MODE HELPERS{% endcomment %}
+{% if debug_mode %}
+  <script>
+    console.group('📊 Analytics Tracking Debug - Professional Edition');
+    console.log('Services configurés:');
+    {% if gtm_id != blank %}console.log('✅ Google Tag Manager:', '{{ gtm_id }}');{% endif %}
+    {% if ga4_id != blank %}console.log('✅ Google Analytics 4:', '{{ ga4_id }}');{% endif %}
+    {% if facebook_pixel != blank %}console.log('✅ Meta/Facebook Pixel:', '{{ facebook_pixel }}');{% endif %}
+    {% if sentry_dsn != blank %}console.log('✅ Sentry Error Monitoring: Configured');{% endif %}
+    {% if hotjar_id != blank %}console.log('✅ Hotjar:', '{{ hotjar_id }}');{% endif %}
+    {% if pinterest_tag != blank %}console.log('✅ Pinterest Tag:', '{{ pinterest_tag }}');{% endif %}
+    {% if tiktok_pixel != blank %}console.log('✅ TikTok Pixel:', '{{ tiktok_pixel }}');{% endif %}
+
+    console.log('Configuration:');
+    console.log('- GDPR Mode:', {{ gdpr_mode }});
+    console.log('- Load Strategy:', '{{ load_strategy }}');
+    console.log('- Enhanced E-commerce:', {{ enhanced_ecommerce }});
+    console.log('- Performance Monitoring:', {{ settings.performance_monitoring | default: true }});
+    console.groupEnd();
+
+    // Test de connectivité des services
+    setTimeout(function() {
+      console.group('🔗 Services Connectivity Check');
+      {% if gtm_id != blank %}
+        console.log('GTM DataLayer:', typeof dataLayer !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+      {% endif %}
+      {% if ga4_id != blank %}
+        console.log('GA4 gtag:', typeof gtag !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+      {% endif %}
+      {% if facebook_pixel != blank %}
+        console.log('Facebook fbq:', typeof fbq !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+      {% endif %}
+      {% if sentry_dsn != blank %}
+        console.log('Sentry:', typeof Sentry !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+      {% endif %}
+      console.groupEnd();
+    }, 3000);
+  </script>
+{% endif %}

@@ -1,0 +1,71 @@
+# .gitignore pour TPS BASE DEV
+
+# === SÉCURITÉ - FICHIERS SENSIBLES ===
+.env
+.env.local
+.env.master
+.env.backup
+*.backup
+manage-tokens.sh
+**/tokens.txt
+**/secrets.txt
+
+# === SHOPIFY DEVELOPMENT ===
+.shopifyignore
+*.log
+*.tmp
+
+# === SYSTÈME ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === ÉDITEURS ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === NODE.JS ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === ARCHIVES & BACKUPS ===
+*.zip
+*.tar.gz
+*.rar
+backup/
+backups/
+*.old
+*.bak
+
+# === RAPPORTS & LOGS ===
+analytics_validation_*.log
+locales-report.txt
+validation_report_*.txt
+test-results/
+reports/
+
+# === TEMPORAIRES ===
+tmp/
+temp/
+cache/
+.cache/
+
+# === CERTIFICATS ===
+*.pem
+*.key
+*.crt
+*.p12
+
+# === DÉVELOPPEMENT ===
+debug.log
+error.log
+access.log
