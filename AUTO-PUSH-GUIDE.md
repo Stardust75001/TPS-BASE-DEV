@@ -10,7 +10,7 @@ Le système d'auto-push automatique est maintenant **100% opérationnel** et pus
 
 ### **1. 📁 Auto-Push Scripts**
 - **`auto-push-on-close.sh`** - Script principal d'auto-push
-- **`vscode-autopush-daemon.sh`** - Daemon de surveillance VS Code  
+- **`vscode-autopush-daemon.sh`** - Daemon de surveillance VS Code
 - **`autopush-controller.sh`** - Contrôleur avec interface graphique
 
 ### **2. ⚙️ VS Code Integration**
@@ -69,7 +69,7 @@ ps aux | grep vscode-autopush
 
 ```bash
 1. Détection changements (git status)
-2. Auto-add tous fichiers modifiés  
+2. Auto-add tous fichiers modifiés
 3. Commit avec timestamp automatique
 4. Push vers GitHub (origin/main)
 5. Log des opérations
@@ -91,7 +91,7 @@ ps aux | grep vscode-autopush
 # Statut auto-push
 ./autopush-controller.sh
 
-# Logs récents  
+# Logs récents
 tail -f ~/.vscode-autopush.log
 
 # Historique commits auto-push
@@ -151,7 +151,7 @@ sleep 5  # Vérification toutes les 5 secondes
 
 **À chaque fermeture de VS Code, vos changements seront automatiquement :**
 1. 📝 Committés avec timestamp
-2. 🚀 Pushés sur GitHub  
+2. 🚀 Pushés sur GitHub
 3. 📊 Loggés pour suivi
 4. 🔔 Notifiés (macOS)
 

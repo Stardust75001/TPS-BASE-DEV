@@ -57,13 +57,13 @@ start_daemon() {
         echo -e "${YELLOW}⚠️  Auto-push déjà actif${NC}"
         return
     fi
-    
+
     echo -e "${BLUE}🚀 Démarrage auto-push daemon...${NC}"
-    
+
     # Démarrer en arrière-plan
     nohup "$DAEMON_SCRIPT" > /dev/null 2>&1 &
     sleep 2
-    
+
     if check_status > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Auto-push démarré avec succès${NC}"
     else
@@ -76,10 +76,10 @@ stop_daemon() {
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
         echo -e "${BLUE}🛑 Arrêt auto-push (PID: $PID)...${NC}"
-        
+
         kill $PID 2>/dev/null || true
         sleep 2
-        
+
         if ! ps -p $PID > /dev/null 2>&1; then
             rm -f "$PID_FILE"
             echo -e "${GREEN}✅ Auto-push arrêté${NC}"
@@ -117,7 +117,7 @@ clean_logs() {
 # Test manuel
 test_manual() {
     echo -e "${BLUE}🧪 Test manuel auto-push...${NC}"
-    
+
     if [ -n "$(git status --porcelain)" ]; then
         echo -e "${GREEN}📝 Changements détectés, test push...${NC}"
         ./auto-push-on-close.sh
@@ -130,7 +130,7 @@ test_manual() {
 while true; do
     show_menu
     read -p "🎯 Choisir une option (1-7): " choice
-    
+
     case $choice in
         1) start_daemon ;;
         2) stop_daemon ;;
@@ -141,7 +141,7 @@ while true; do
         7) echo -e "${GREEN}👋 Au revoir!${NC}"; exit 0 ;;
         *) echo -e "${RED}❌ Option invalide${NC}" ;;
     esac
-    
+
     echo ""
     read -p "Appuyer sur Entrée pour continuer..."
     clear

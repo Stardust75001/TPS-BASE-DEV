@@ -33,12 +33,12 @@ git commit -m "🚀 AUTO-PUSH: Sauvegarde automatique workspace ($TIMESTAMP)"
 # Push vers GitHub
 if git push origin main 2>/dev/null; then
     echo "✅ AUTO-PUSH RÉUSSI: Changements sauvegardés sur GitHub"
-    
+
     # Log de l'auto-push
     echo "[$TIMESTAMP] AUTO-PUSH SUCCESS: $(git rev-parse --short HEAD)" >> .auto-push.log
 else
     echo "⚠️  AUTO-PUSH ÉCHOUÉ: Vérifier connexion GitHub"
-    
+
     # Log de l'échec
     echo "[$TIMESTAMP] AUTO-PUSH FAILED: Connexion GitHub" >> .auto-push.log
 fi

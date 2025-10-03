@@ -32,15 +32,15 @@ log_message() {
 # Fonction auto-push
 auto_push() {
     cd "$WORKSPACE_DIR"
-    
+
     # Vérifier s'il y a des changements
     if [ -n "$(git status --porcelain)" ]; then
         log_message "📝 Changements détectés, exécution auto-push..."
-        
+
         # Auto-commit et push
         git add -A
         git commit -m "🚀 AUTO-PUSH: Sauvegarde automatique fermeture VS Code ($(date '+%H:%M:%S'))"
-        
+
         if git push origin main 2>/dev/null; then
             log_message "✅ AUTO-PUSH RÉUSSI: $(git rev-parse --short HEAD)"
         else
@@ -59,16 +59,16 @@ while true; do
     if ! pgrep -f "Visual Studio Code" > /dev/null; then
         # VS Code fermé, attendre un peu puis vérifier à nouveau
         sleep 2
-        
+
         if ! pgrep -f "Visual Studio Code" > /dev/null; then
             log_message "🔍 VS Code fermé détecté"
             auto_push
-            
+
             # Attendre avant de vérifier à nouveau (éviter spam)
             sleep 10
         fi
     fi
-    
+
     # Vérification toutes les 5 secondes
     sleep 5
 done

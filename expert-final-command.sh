@@ -66,8 +66,6 @@ case $choice in
         fi
         ;;
 
-    ;;
-
     3)
         echo "📊 DASHBOARD MÉTRIQUE & PILOTAGE:"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
