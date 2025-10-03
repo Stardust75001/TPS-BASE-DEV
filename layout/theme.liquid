@@ -103,7 +103,7 @@
           true
         );
 
-        console.log('[SHIELD] Anti-error system activated EARLY');
+        
 
         // Fallbacks immédiats pour éviter les "Can't find variable"
         window.bootstrap = window.bootstrap || {
@@ -151,7 +151,7 @@
             return { on: function () {}, destroy: function () {} };
           };
 
-        console.log('[LIGHTNING] Immediate fallbacks ready');
+        
 
         // ===== Script Tag Blocker for Theme Assets (prevents nosniff) =====
         try {
@@ -301,7 +301,7 @@
             });
           }
 
-          console.log('[GUARD] Script tag blocker active (DOM, write, setters)');
+          
         } catch (e) {
           console.warn('[GUARD] Script tag blocker setup failed', e);
         }
@@ -485,10 +485,10 @@
               });
               Sentry.captureException(new Error('Test Sentry'));
             } catch (error) {
-              console.log('Sentry initialization failed:', error);
+              
             }
           } else {
-            console.log('Sentry not loaded - monitoring disabled');
+            
           }
         });
       </script>
@@ -743,9 +743,9 @@
               }
             });
             if (count === 0) {
-              console.log('[CFH] No theme asset tag detected in content_for_header');
+              
             } else {
-              console.log('[CFH] Total theme asset scripts detected in CFH:', count);
+              
             }
             window.CFH_AUDIT = { scripts: scripts, themeAssetCount: count };
           }

@@ -202,7 +202,7 @@ Les contrevenants seront poursuivis dans toute la mesure permise par la loi.
                       ),
                       countDown = new Date('{{ block.settings.year }}-{{ block.settings.month }}-{{ block.settings.day }}T{{ block.settings.hour }}:{{ block.settings.minute }}:00Z').getTime();
 
-                    console.log('start timer, end date:' + countDown)
+                    
                     const interval = setInterval(function () {
                       let now = new Date().getTime(),
                         distance = countDown - now,

@@ -335,7 +335,7 @@
     // Callbacks Turnstile
     window.onTurnstileSuccess = function (token) {
       if (window.analyticsConfig && window.analyticsConfig.debug) {
-        console.log('Turnstile verification successful');
+        
       }
 
       // Envoyer à analytics si configuré
@@ -432,36 +432,36 @@
 {% if debug_mode %}
   <script>
     console.group('📊 Analytics Tracking Debug - Professional Edition');
-    console.log('Services configurés:');
-    {% if gtm_id != blank %}console.log('✅ Google Tag Manager:', '{{ gtm_id }}');{% endif %}
-    {% if ga4_id != blank %}console.log('✅ Google Analytics 4:', '{{ ga4_id }}');{% endif %}
-    {% if facebook_pixel != blank %}console.log('✅ Meta/Facebook Pixel:', '{{ facebook_pixel }}');{% endif %}
-    {% if sentry_dsn != blank %}console.log('✅ Sentry Error Monitoring: Configured');{% endif %}
-    {% if hotjar_id != blank %}console.log('✅ Hotjar:', '{{ hotjar_id }}');{% endif %}
-    {% if pinterest_tag != blank %}console.log('✅ Pinterest Tag:', '{{ pinterest_tag }}');{% endif %}
-    {% if tiktok_pixel != blank %}console.log('✅ TikTok Pixel:', '{{ tiktok_pixel }}');{% endif %}
+    
+    {% if gtm_id != blank %}{% endif %}
+    {% if ga4_id != blank %}{% endif %}
+    {% if facebook_pixel != blank %}{% endif %}
+    {% if sentry_dsn != blank %}{% endif %}
+    {% if hotjar_id != blank %}{% endif %}
+    {% if pinterest_tag != blank %}{% endif %}
+    {% if tiktok_pixel != blank %}{% endif %}
 
-    console.log('Configuration:');
-    console.log('- GDPR Mode:', {{ gdpr_mode }});
-    console.log('- Load Strategy:', '{{ load_strategy }}');
-    console.log('- Enhanced E-commerce:', {{ enhanced_ecommerce }});
-    console.log('- Performance Monitoring:', {{ settings.performance_monitoring | default: true }});
+    
+    
+    
+    
+    
     console.groupEnd();
 
     // Test de connectivité des services
     setTimeout(function() {
       console.group('🔗 Services Connectivity Check');
       {% if gtm_id != blank %}
-        console.log('GTM DataLayer:', typeof dataLayer !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+        
       {% endif %}
       {% if ga4_id != blank %}
-        console.log('GA4 gtag:', typeof gtag !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+        
       {% endif %}
       {% if facebook_pixel != blank %}
-        console.log('Facebook fbq:', typeof fbq !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+        
       {% endif %}
       {% if sentry_dsn != blank %}
-        console.log('Sentry:', typeof Sentry !== 'undefined' ? '✅ OK' : '❌ NOT LOADED');
+        
       {% endif %}
       console.groupEnd();
     }, 3000);

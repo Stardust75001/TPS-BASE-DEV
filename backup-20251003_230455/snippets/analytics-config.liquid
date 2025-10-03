@@ -141,7 +141,7 @@
     // === MÉTHODES UTILITAIRES ===
     log: function(...args) {
       if (this.debug && typeof console !== 'undefined') {
-        console.log('[Analytics Config]', ...args);
+        
       }
     },
 
@@ -299,13 +299,13 @@
   {% comment %}🐛 DEBUG MODE: Afficher la configuration dans la console{% endcomment %}
   <script>
     console.group('🚀 Analytics Configuration Debug');
-    console.log('Configuration complète:', window.analyticsConfig);
+    
     console.log(
       'Services activés:',
       Object.keys(window.analyticsConfig.services).filter((s) => window.analyticsConfig.services[s].enabled)
     );
-    console.log('Mode GDPR:', window.analyticsConfig.gdprCompliance);
-    console.log('Stratégie de chargement:', window.analyticsConfig.loadStrategy);
+    
+    
     console.groupEnd();
   </script>
 {% endif %}
