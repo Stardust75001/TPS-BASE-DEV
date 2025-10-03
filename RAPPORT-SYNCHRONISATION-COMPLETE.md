@@ -1,7 +1,7 @@
 # 🔍 RAPPORT DE SYNCHRONISATION: TPS BASE 316 → TPS BASE DEV
 
-**Date:** 3 octobre 2025  
-**Audit par:** Expert Shopify Analytics  
+**Date:** 3 octobre 2025
+**Audit par:** Expert Shopify Analytics
 **Status:** ✅ SYNCHRONISATION COMPLÈTE
 
 ## 📋 RÉSUMÉ EXÉCUTIF
@@ -24,7 +24,7 @@ Lors de la bascule vers TPS BASE DEV, **AUCUN élément critique n'a été perdu
 
 **Langues disponibles:**
 ```
-da.json, de.json, en.default.json, es.json, fr.json, 
+da.json, de.json, en.default.json, es.json, fr.json,
 it.json, nl.json, pl.json, pt.json, sv.json
 ```
 
@@ -40,7 +40,7 @@ it.json, nl.json, pl.json, pt.json, sv.json
 - ✅ **Google Tag Manager** (GTM-P9SBYVC4)
 - ✅ **Google Analytics 4** (G-LM1PJ22ZM3)
 - ✅ **Facebook/Meta Pixel** (1973238620087976)
-- ✅ **Ahrefs Webmaster Tools** 
+- ✅ **Ahrefs Webmaster Tools**
 - ✅ **Cloudflare Turnstile** (Protection anti-bot)
 - ✅ **Sentry Error Monitoring**
 - ✅ **Hotjar** (configuration disponible)

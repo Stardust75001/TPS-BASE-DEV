@@ -4,8 +4,8 @@
  */
 
 function debug(...args) {
-  if (typeof isDev !== 'undefined' && isDev) {
-    console.debug('[Stories Tooltip]', ...args);
+  if (typeof isDev !== "undefined" && isDev) {
+    console.debug("[Stories Tooltip]", ...args);
   }
 }
 
@@ -13,23 +13,31 @@ document.addEventListener("DOMContentLoaded", function () {
   const isMobile = window.matchMedia("(hover: none)").matches;
   debug("isMobile:", isMobile);
 
-  document.querySelectorAll(".animated-stories-link").forEach(link => {
+  document.querySelectorAll(".animated-stories-link").forEach((link) => {
     const tooltip = link.querySelector(".tooltip-bubble");
     if (!tooltip) return;
 
     // Desktop : hover = tooltip, clic = navigation directe
     if (!isMobile) {
-      link.addEventListener("mouseenter", () => {
-        tooltip.classList.add("hover-visible");
-        debug("Hover enter on", link);
-        setTimeout(() => adjustTooltipPosition(tooltip), 0);
-      }, { passive: true });
+      link.addEventListener(
+        "mouseenter",
+        () => {
+          tooltip.classList.add("hover-visible");
+          debug("Hover enter on", link);
+          setTimeout(() => adjustTooltipPosition(tooltip), 0);
+        },
+        { passive: true }
+      );
 
-      link.addEventListener("mouseleave", () => {
-        tooltip.classList.remove("hover-visible");
-        debug("Hover leave on", link);
-        resetTooltipPosition(tooltip);
-      }, { passive: true });
+      link.addEventListener(
+        "mouseleave",
+        () => {
+          tooltip.classList.remove("hover-visible");
+          debug("Hover leave on", link);
+          resetTooltipPosition(tooltip);
+        },
+        { passive: true }
+      );
 
       // Pas besoin de bloquer le clic → navigation normale
     }
@@ -38,15 +46,17 @@ document.addEventListener("DOMContentLoaded", function () {
     else {
       let tappedOnce = false;
 
-      link.addEventListener("click", e => {
+      link.addEventListener("click", (e) => {
         if (!tappedOnce) {
           e.preventDefault();
           debug("1er tap on", link);
 
           // Cache autres infobulles
-          document.querySelectorAll(".tooltip-bubble.tap-visible").forEach(el => {
-            el.classList.remove("tap-visible");
-          });
+          document
+            .querySelectorAll(".tooltip-bubble.tap-visible")
+            .forEach((el) => {
+              el.classList.remove("tap-visible");
+            });
 
           tooltip.classList.add("tap-visible");
           setTimeout(() => adjustTooltipPosition(tooltip), 0);
@@ -73,11 +83,11 @@ function adjustTooltipPosition(tooltip) {
   tooltip.style.left = "50%";
   tooltip.style.top = "-45px"; // Au-dessus de l'icône
   tooltip.style.transform = "translateX(-50%)";
-  
+
   // Vérification débordement écran
   const rect = tooltip.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
-  
+
   // Ajustement si débordement à droite
   if (rect.right > viewportWidth - 10) {
     tooltip.style.left = "auto";
@@ -101,16 +111,20 @@ function resetTooltipPosition(tooltip) {
 }
 
 // Gestion des redimensionnements de fenêtre
-window.addEventListener('resize', function() {
-  document.querySelectorAll('.tooltip-bubble.hover-visible, .tooltip-bubble.tap-visible').forEach(tooltip => {
-    adjustTooltipPosition(tooltip);
-  });
+window.addEventListener("resize", function () {
+  document
+    .querySelectorAll(
+      ".tooltip-bubble.hover-visible, .tooltip-bubble.tap-visible"
+    )
+    .forEach((tooltip) => {
+      adjustTooltipPosition(tooltip);
+    });
 });
 
 // Reset global sur changement de page
-window.addEventListener('beforeunload', function() {
-  document.querySelectorAll('.tooltip-bubble').forEach(tooltip => {
-    tooltip.classList.remove('hover-visible', 'tap-visible');
+window.addEventListener("beforeunload", function () {
+  document.querySelectorAll(".tooltip-bubble").forEach((tooltip) => {
+    tooltip.classList.remove("hover-visible", "tap-visible");
   });
 });
 
