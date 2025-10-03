@@ -211,44 +211,18 @@ case $choice in
         ;;
 
     6)
-        echo "📖 GUIDE COMPLET:"
-        echo "━━━━━━━━━━━━━━━━━"
-
-        if [ -f "./GUIDE-POST-OPTIMIZATION.md" ]; then
-            echo "📚 Guide disponible: ./GUIDE-POST-OPTIMIZATION.md"
-
-            read -p "Afficher le guide? (y/N): " show_guide
-            if [[ $show_guide =~ ^[Yy]$ ]]; then
-                cat "./GUIDE-POST-OPTIMIZATION.md"
-            fi
-        else
-            echo "📋 RÉSUMÉ RAPIDE:"
-            echo ""
-            echo "🔄 REDÉMARRAGE VS CODE:"
-            echo "   code . --new-window"
-            echo ""
-            echo "📊 RAPPORTS GITHUB ACTIONS:"
-            REPO_URL=$(get_github_url)
-            echo "   $REPO_URL/actions"
-            echo ""
-            echo "🚀 AUTOMATION:"
-            echo "   ./expert-final-command.sh"
-        fi
-        ;;
-
-    6)
         echo "🌐 LANCER SHOPIFY LIVE (PRODUCTION):"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
         echo "⚠️  ATTENTION: Vous allez déployer en PRODUCTION"
         echo "🎯 Store: f6d72e-0f.myshopify.com"
         echo ""
-        
+
         read -p "🚨 Confirmer le déploiement LIVE (production)? (y/N): " confirm_live
-        
+
         if [[ $confirm_live =~ ^[Yy]$ ]]; then
             echo "🚀 Lancement déploiement Shopify LIVE..."
-            
+
             # Vérifier quel script de déploiement utiliser
             if [ -f "./deploy-auto-shopify.sh" ]; then
                 echo "📦 Utilisation déploiement automatique..."
@@ -264,13 +238,13 @@ case $choice in
                 echo "🔧 Options manuelles:"
                 echo "   shopify theme push --live --store=f6d72e-0f.myshopify.com"
             fi
-            
+
             echo ""
             echo "🔗 LIENS SHOPIFY:"
             echo "├── 🏪 Admin: https://f6d72e-0f.myshopify.com/admin"
             echo "├── 🎨 Themes: https://f6d72e-0f.myshopify.com/admin/themes"
             echo "└── 🌐 Site: https://f6d72e-0f.myshopify.com"
-            
+
         else
             echo "❌ Déploiement LIVE annulé"
             echo "💡 Pour déployer plus tard: choisir option 6"
