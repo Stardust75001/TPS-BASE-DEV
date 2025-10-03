@@ -14,7 +14,7 @@ echo "────────────────────────�
 # Installer PyYAML si manquant
 if ! python3 -c "import yaml" 2>/dev/null; then
     echo "🔄 Installation module PyYAML..."
-    
+
     # Essayer pip3 d'abord
     if command -v pip3 &> /dev/null; then
         pip3 install PyYAML --user --quiet
