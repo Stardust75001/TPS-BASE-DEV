@@ -1,0 +1,301 @@
+name: 🔄 Daily Theme Health Check
+
+on:
+  schedule:
+    # Tous les jours à 9h00 UTC (11h00 Paris)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Permet l'exécution manuelle
+  push:
+    branches: [ main ]
+    paths:
+      - '**/*.liquid'
+      - 'locales/*.json'
+      - 'assets/*.js'
+      - 'assets/*.css'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: 🔒 Quick Security Scan
+      id: security_check
+      run: |
+        echo "=== SCAN SÉCURITÉ RAPIDE ===" > health_report.txt
+        
+        # Secrets critiques
+        CRITICAL_SECRETS=$(grep -r "sk_live_\|pk_live_" --include="*.liquid" --include="*.js" . | wc -l || echo "0")
+        
+        # API Keys
+        API_KEYS=$(grep -r "AIza[A-Za-z0-9]\{35\}" --include="*.liquid" --include="*.js" . | wc -l || echo "0")
+        
+        # Tokens GitHub
+        GITHUB_TOKENS=$(grep -r "ghp_\|gho_\|ghu_\|ghs_\|ghr_" --include="*.liquid" --include="*.js" . | wc -l || echo "0")
+        
+        # URLs avec credentials
+        CREDENTIAL_URLS=$(grep -r "https://[a-zA-Z0-9._-]*:[a-zA-Z0-9._-]*@" --include="*.liquid" --include="*.js" . | wc -l || echo "0")
+        
+        TOTAL_SECRETS=$((CRITICAL_SECRETS + API_KEYS + GITHUB_TOKENS + CREDENTIAL_URLS))
+        
+        echo "🔍 Secrets Shopify critiques: $CRITICAL_SECRETS" >> health_report.txt
+        echo "🔍 Clés API exposées: $API_KEYS" >> health_report.txt  
+        echo "🔍 Tokens GitHub: $GITHUB_TOKENS" >> health_report.txt
+        echo "🔍 URLs avec credentials: $CREDENTIAL_URLS" >> health_report.txt
+        echo "🎯 Total secrets exposés: $TOTAL_SECRETS" >> health_report.txt
+        
+        echo "total_secrets=$TOTAL_SECRETS" >> $GITHUB_OUTPUT
+        
+        if [ $TOTAL_SECRETS -gt 0 ]; then
+          echo "🚨 ALERTE SÉCURITÉ: $TOTAL_SECRETS secret(s) exposé(s)!" >> health_report.txt
+          echo "security_status=CRITICAL" >> $GITHUB_OUTPUT
+        else
+          echo "✅ Aucun secret exposé détecté" >> health_report.txt
+          echo "security_status=OK" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: 📝 JSON Validation Quick
+      id: json_check
+      run: |
+        echo "=== VALIDATION JSON ===" >> health_report.txt
+        JSON_ERRORS=0
+        JSON_FILES=0
+        
+        for file in locales/*.json; do
+          if [ -f "$file" ]; then
+            JSON_FILES=$((JSON_FILES + 1))
+            if python3 -m json.tool "$file" > /dev/null 2>&1; then
+              echo "✅ $(basename "$file")" >> health_report.txt
+            else
+              echo "❌ $(basename "$file") - ERREUR JSON" >> health_report.txt
+              JSON_ERRORS=$((JSON_ERRORS + 1))
+            fi
+          fi
+        done
+        
+        echo "📊 Fichiers JSON vérifiés: $JSON_FILES" >> health_report.txt
+        echo "📊 Erreurs détectées: $JSON_ERRORS" >> health_report.txt
+        
+        echo "json_errors=$JSON_ERRORS" >> $GITHUB_OUTPUT
+        echo "json_files=$JSON_FILES" >> $GITHUB_OUTPUT
+    
+    - name: ⚡ Performance Quick Check
+      id: performance_check
+      run: |
+        echo "=== CHECK PERFORMANCE ===" >> health_report.txt
+        
+        # Images sans dimensions (impact CLS)
+        IMG_ISSUES=$(grep -r "<img" --include="*.liquid" . | grep -v -E "width=|height=" | wc -l || echo "0")
+        
+        # Console.log en production
+        CONSOLE_ISSUES=$(grep -r "console\." --include="*.liquid" . | wc -l || echo "0")
+        
+        # Liquid deprecated filters
+        DEPRECATED_COUNT=$(find . -name "*.liquid" -exec grep -l "img_url\|asset_url" {} \; | wc -l || echo "0")
+        
+        echo "📐 Images sans dimensions: $IMG_ISSUES" >> health_report.txt
+        echo "🖥️ Console.log restants: $CONSOLE_ISSUES" >> health_report.txt
+        echo "⚠️ Filtres dépréciés: $DEPRECATED_COUNT" >> health_report.txt
+        
+        # Score de santé simple
+        HEALTH_ISSUES=$((IMG_ISSUES/10 + CONSOLE_ISSUES + DEPRECATED_COUNT))
+        
+        if [ $HEALTH_ISSUES -eq 0 ]; then
+          HEALTH_STATUS="PERFECT"
+        elif [ $HEALTH_ISSUES -le 5 ]; then
+          HEALTH_STATUS="GOOD"
+        elif [ $HEALTH_ISSUES -le 15 ]; then
+          HEALTH_STATUS="FAIR"
+        else
+          HEALTH_STATUS="POOR"
+        fi
+        
+        echo "🎯 Score santé: $HEALTH_STATUS" >> health_report.txt
+        echo "performance_status=$HEALTH_STATUS" >> $GITHUB_OUTPUT
+        echo "health_issues=$HEALTH_ISSUES" >> $GITHUB_OUTPUT
+    
+    - name: 🎯 Health Score Calculation
+      id: health_score
+      run: |
+        SECURITY_STATUS="${{ steps.security_check.outputs.security_status }}"
+        JSON_ERRORS="${{ steps.json_check.outputs.json_errors }}"
+        PERFORMANCE_STATUS="${{ steps.performance_check.outputs.performance_status }}"
+        TOTAL_SECRETS="${{ steps.security_check.outputs.total_secrets }}"
+        
+        # Calcul du score de santé global
+        HEALTH_SCORE=100
+        
+        # Pénalités sécurité (critique)
+        if [ "$SECURITY_STATUS" = "CRITICAL" ]; then
+          HEALTH_SCORE=$((HEALTH_SCORE - 50))
+        fi
+        
+        # Pénalités JSON
+        if [ $JSON_ERRORS -gt 0 ]; then
+          HEALTH_SCORE=$((HEALTH_SCORE - JSON_ERRORS * 10))
+        fi
+        
+        # Pénalités performance
+        case $PERFORMANCE_STATUS in
+          "POOR") HEALTH_SCORE=$((HEALTH_SCORE - 20)) ;;
+          "FAIR") HEALTH_SCORE=$((HEALTH_SCORE - 10)) ;;
+          "GOOD") HEALTH_SCORE=$((HEALTH_SCORE - 5)) ;;
+        esac
+        
+        # Minimum 0
+        if [ $HEALTH_SCORE -lt 0 ]; then
+          HEALTH_SCORE=0
+        fi
+        
+        echo "🏆 Score de santé final: $HEALTH_SCORE/100" >> health_report.txt
+        echo "health_score=$HEALTH_SCORE" >> $GITHUB_OUTPUT
+        
+        # Déterminer le statut global
+        if [ $HEALTH_SCORE -ge 95 ]; then
+          GLOBAL_STATUS="🏆 EXCELLENT"
+        elif [ $HEALTH_SCORE -ge 85 ]; then
+          GLOBAL_STATUS="✅ BON"
+        elif [ $HEALTH_SCORE -ge 70 ]; then
+          GLOBAL_STATUS="⚠️ MOYEN"
+        elif [ $HEALTH_SCORE -ge 50 ]; then
+          GLOBAL_STATUS="❌ FAIBLE"
+        else
+          GLOBAL_STATUS="🚨 CRITIQUE"
+        fi
+        
+        echo "📊 Statut global: $GLOBAL_STATUS" >> health_report.txt
+        echo "global_status=$GLOBAL_STATUS" >> $GITHUB_OUTPUT
+    
+    - name: 🚨 Create Security Alert Issue
+      if: steps.security_check.outputs.security_status == 'CRITICAL'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const title = "🚨 ALERTE SÉCURITÉ - Secrets exposés détectés";
+          const body = `## 🚨 Alerte Sécurité Critique
+          
+          **⚠️ Des secrets ont été détectés dans le code source !**
+          
+          ### 📊 Détails
+          - **Secrets trouvés**: ${{ steps.security_check.outputs.total_secrets }}
+          - **Date de détection**: ${new Date().toLocaleString('fr-FR')}
+          - **Score de santé**: ${{ steps.health_score.outputs.health_score }}/100
+          
+          ### 🔍 Action Immédiate Requise
+          
+          1. **Vérifier les fichiers suivants** pour des secrets exposés:
+             - Fichiers \`.liquid\`
+             - Fichiers JavaScript dans \`assets/\`
+             - Fichiers de configuration
+          
+          2. **Remplacer immédiatement** tous les secrets par des variables d'environnement
+          
+          3. **Révoquer les clés/tokens** exposés si nécessaire
+          
+          ### 🛡️ Recommandations
+          
+          - Utiliser les variables d'environnement Shopify
+          - Configurer des secrets GitHub pour les actions
+          - Implémenter une validation pre-commit
+          
+          ---
+          *🤖 Alerte générée automatiquement par GitHub Actions*
+          `;
+          
+          // Chercher une issue existante
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: 'security-alert',
+            state: 'open'
+          });
+          
+          if (issues.data.length === 0) {
+            // Créer une nouvelle issue si aucune n'existe
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security-alert', 'critical', 'bug']
+            });
+          } else {
+            // Commenter sur l'issue existante
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issues.data[0].number,
+              body: `🚨 **Nouvelle détection de secrets**\n\nNombre de secrets: ${{ steps.security_check.outputs.total_secrets }}\nDate: ${new Date().toLocaleString('fr-FR')}`
+            });
+          }
+    
+    - name: 📊 Comment on Latest PR (if exists)
+      if: github.event_name == 'push'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          // Chercher la PR la plus récente
+          const prs = await github.rest.pulls.list({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            sort: 'updated',
+            per_page: 1
+          });
+          
+          if (prs.data.length > 0) {
+            const pr = prs.data[0];
+            const healthScore = "${{ steps.health_score.outputs.health_score }}";
+            const globalStatus = "${{ steps.health_score.outputs.global_status }}";
+            
+            const comment = `## 🏥 Health Check Report
+            
+            **📊 Score de santé: ${healthScore}/100**
+            **🎯 Statut: ${globalStatus}**
+            
+            ### 📈 Détails
+            - 🔒 Sécurité: ${{ steps.security_check.outputs.security_status }}
+            - 📝 JSON: ${{ steps.json_check.outputs.json_errors }} erreur(s)
+            - ⚡ Performance: ${{ steps.performance_check.outputs.performance_status }}
+            
+            ${healthScore < 80 ? '⚠️ **Optimisations recommandées avant merge**' : '✅ **Prêt pour le merge**'}
+            
+            ---
+            *🤖 Check automatique par GitHub Actions*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body: comment
+            });
+          }
+    
+    - name: 📋 Display Health Report
+      if: always()
+      run: |
+        echo "📊 === RAPPORT DE SANTÉ QUOTIDIEN ==="
+        cat health_report.txt
+        echo ""
+        echo "🎯 Score final: ${{ steps.health_score.outputs.health_score }}/100"
+        echo "📊 Statut: ${{ steps.health_score.outputs.global_status }}"
+    
+    - name: 💾 Upload Health Report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: daily-health-report-$(date +%Y%m%d)
+        path: health_report.txt
+        retention-days: 30

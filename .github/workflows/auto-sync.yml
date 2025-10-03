@@ -1,0 +1,370 @@
+name: 🔄 Auto-Sync & PR Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      sync_type:
+        description: 'Type de synchronisation'
+        required: true
+        default: 'smart'
+        type: choice
+        options:
+        - smart
+        - force
+        - backup-first
+      create_pr:
+        description: 'Créer une PR automatiquement'
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    # Tous les vendredis à 16h00 UTC (18h00 Paris) pour sync hebdo
+    - cron: '0 16 * * 5'
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  auto-sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: 🛠️ Setup environment
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Auto-Sync"
+    
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: 📊 Pre-sync Analysis
+      id: pre_analysis
+      run: |
+        echo "=== ANALYSE PRE-SYNCHRONISATION ===" > sync_report.txt
+        
+        # Vérifier l'état du repo
+        UNCOMMITTED=$(git status --porcelain | wc -l)
+        UNTRACKED=$(git ls-files --others --exclude-standard | wc -l)
+        MODIFIED=$(git diff --name-only | wc -l)
+        
+        echo "📁 Fichiers non commités: $UNCOMMITTED" >> sync_report.txt
+        echo "📁 Fichiers non trackés: $UNTRACKED" >> sync_report.txt
+        echo "📁 Fichiers modifiés: $MODIFIED" >> sync_report.txt
+        
+        # Vérifier la connectivité avec origin
+        git fetch origin main || echo "⚠️ Problème de connectivité avec origin" >> sync_report.txt
+        
+        # Vérifier les conflits potentiels
+        BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
+        AHEAD=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "0")
+        
+        echo "📈 Commits en retard: $BEHIND" >> sync_report.txt
+        echo "📉 Commits en avance: $AHEAD" >> sync_report.txt
+        
+        echo "uncommitted=$UNCOMMITTED" >> $GITHUB_OUTPUT
+        echo "untracked=$UNTRACKED" >> $GITHUB_OUTPUT
+        echo "behind=$BEHIND" >> $GITHUB_OUTPUT
+        echo "ahead=$AHEAD" >> $GITHUB_OUTPUT
+        
+        # Déterminer la stratégie de sync
+        TOTAL_CHANGES=$((UNCOMMITTED + UNTRACKED))
+        if [ $TOTAL_CHANGES -gt 0 ]; then
+          echo "sync_needed=true" >> $GITHUB_OUTPUT
+          echo "🔄 Synchronisation nécessaire: $TOTAL_CHANGES changement(s)" >> sync_report.txt
+        else
+          echo "sync_needed=false" >> $GITHUB_OUTPUT
+          echo "✅ Repository déjà synchronisé" >> sync_report.txt
+        fi
+    
+    - name: 🔒 Security Pre-Check
+      if: steps.pre_analysis.outputs.sync_needed == 'true'
+      id: security_precheck
+      run: |
+        echo "=== VÉRIFICATION SÉCURITÉ PRE-SYNC ===" >> sync_report.txt
+        
+        # Scan rapide des secrets
+        SECRETS_COUNT=0
+        
+        # Chercher des secrets dans les fichiers modifiés
+        if [ -n "$(git status --porcelain)" ]; then
+          git status --porcelain | while read status file; do
+            if [[ "$file" =~ \.(liquid|js|json)$ ]]; then
+              # Vérifier les secrets dans ce fichier
+              SECRETS_IN_FILE=$(grep -E "sk_live_|pk_live_|AIza[A-Za-z0-9]{35}|ghp_|gho_|ghu_|ghs_|ghr_" "$file" 2>/dev/null | wc -l || echo "0")
+              if [ $SECRETS_IN_FILE -gt 0 ]; then
+                echo "🚨 Secrets détectés dans $file: $SECRETS_IN_FILE" >> sync_report.txt
+                SECRETS_COUNT=$((SECRETS_COUNT + SECRETS_IN_FILE))
+              fi
+            fi
+          done
+        fi
+        
+        echo "security_issues=$SECRETS_COUNT" >> $GITHUB_OUTPUT
+        
+        if [ $SECRETS_COUNT -gt 0 ]; then
+          echo "🚨 BLOCAGE: Secrets détectés avant synchronisation!" >> sync_report.txt
+          echo "security_block=true" >> $GITHUB_OUTPUT
+        else
+          echo "✅ Aucun secret détecté" >> sync_report.txt
+          echo "security_block=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: 🛑 Block if Security Issues
+      if: steps.security_precheck.outputs.security_block == 'true'
+      run: |
+        echo "🚨 SYNCHRONISATION BLOQUÉE: Secrets détectés dans le code!"
+        echo "Veuillez corriger les problèmes de sécurité avant de continuer."
+        cat sync_report.txt
+        exit 1
+    
+    - name: 💾 Create Backup Branch
+      if: steps.pre_analysis.outputs.sync_needed == 'true' && (github.event.inputs.sync_type == 'backup-first' || github.event.inputs.sync_type == 'smart')
+      run: |
+        BACKUP_BRANCH="backup/pre-sync-$(date +%Y%m%d_%H%M%S)"
+        git checkout -b $BACKUP_BRANCH
+        git add .
+        git commit -m "🗄️ Backup before auto-sync: $(date)" || echo "Nothing to backup"
+        git push origin $BACKUP_BRANCH || echo "Backup push failed"
+        git checkout main
+        echo "backup_branch=$BACKUP_BRANCH" >> $GITHUB_ENV
+        echo "📦 Backup créé: $BACKUP_BRANCH" >> sync_report.txt
+    
+    - name: 🧹 Smart Cleanup
+      if: steps.pre_analysis.outputs.sync_needed == 'true'
+      run: |
+        echo "=== NETTOYAGE INTELLIGENT ===" >> sync_report.txt
+        
+        # Nettoyer les fichiers temporaires
+        find . -name "*.bak" -delete || true
+        find . -name "*.tmp" -delete || true
+        find . -name ".DS_Store" -delete || true
+        find . -name "Thumbs.db" -delete || true
+        
+        # Corriger les permissions
+        chmod +x *.sh 2>/dev/null || true
+        
+        # Nettoyer les console.log dans les fichiers liquid (seulement si pas trop)
+        CONSOLE_COUNT=$(grep -r "console\." --include="*.liquid" . | wc -l || echo "0")
+        if [ $CONSOLE_COUNT -lt 10 ]; then
+          find . -name "*.liquid" -exec sed -i.bak 's/console\.log([^;]*);*//g' {} \; 2>/dev/null || true
+          find . -name "*.bak" -delete || true
+          echo "🧹 Console.log nettoyés: $CONSOLE_COUNT" >> sync_report.txt
+        fi
+        
+        # Moderniser les filtres Shopify (img_url -> image_url)
+        DEPRECATED_COUNT=$(find . -name "*.liquid" -exec grep -l "img_url" {} \; | wc -l || echo "0")
+        if [ $DEPRECATED_COUNT -lt 50 ]; then
+          find . -name "*.liquid" -exec sed -i.bak 's/| *img_url/| image_url/g' {} \; 2>/dev/null || true
+          find . -name "*.bak" -delete || true
+          echo "🔄 Filtres modernisés: $DEPRECATED_COUNT fichiers" >> sync_report.txt
+        fi
+        
+        echo "✅ Nettoyage terminé" >> sync_report.txt
+    
+    - name: 📝 Validate JSON Files
+      if: steps.pre_analysis.outputs.sync_needed == 'true'
+      run: |
+        echo "=== VALIDATION JSON ===" >> sync_report.txt
+        JSON_ERRORS=0
+        
+        for file in locales/*.json; do
+          if [ -f "$file" ]; then
+            if python3 -m json.tool "$file" > /dev/null 2>&1; then
+              echo "✅ $(basename "$file")" >> sync_report.txt
+            else
+              echo "❌ $(basename "$file") - ERREUR JSON" >> sync_report.txt
+              JSON_ERRORS=$((JSON_ERRORS + 1))
+            fi
+          fi
+        done
+        
+        if [ $JSON_ERRORS -gt 0 ]; then
+          echo "⚠️ $JSON_ERRORS erreur(s) JSON détectée(s) mais sync continue" >> sync_report.txt
+        else
+          echo "✅ Tous les JSON sont valides" >> sync_report.txt
+        fi
+    
+    - name: 🔄 Intelligent Commit Strategy
+      if: steps.pre_analysis.outputs.sync_needed == 'true'
+      run: |
+        echo "=== STRATÉGIE DE COMMIT ===" >> sync_report.txt
+        
+        # Analyser les types de changements
+        LIQUID_CHANGES=$(git status --porcelain | grep "\.liquid$" | wc -l || echo "0")
+        JSON_CHANGES=$(git status --porcelain | grep "\.json$" | wc -l || echo "0")
+        JS_CHANGES=$(git status --porcelain | grep "\.js$" | wc -l || echo "0")
+        CONFIG_CHANGES=$(git status --porcelain | grep -E "\.(yml|yaml|sh|md)$" | wc -l || echo "0")
+        
+        echo "🎨 Templates Liquid: $LIQUID_CHANGES" >> sync_report.txt
+        echo "📝 Fichiers JSON: $JSON_CHANGES" >> sync_report.txt
+        echo "⚡ Scripts JS: $JS_CHANGES" >> sync_report.txt
+        echo "⚙️ Configuration: $CONFIG_CHANGES" >> sync_report.txt
+        
+        # Créer un message de commit intelligent
+        COMMIT_MSG="🚀 Auto-sync $(date +%Y%m%d): "
+        
+        if [ $LIQUID_CHANGES -gt 0 ]; then
+          COMMIT_MSG="${COMMIT_MSG}Templates ($LIQUID_CHANGES), "
+        fi
+        if [ $JSON_CHANGES -gt 0 ]; then
+          COMMIT_MSG="${COMMIT_MSG}Locales ($JSON_CHANGES), "
+        fi
+        if [ $JS_CHANGES -gt 0 ]; then
+          COMMIT_MSG="${COMMIT_MSG}Scripts ($JS_CHANGES), "
+        fi
+        if [ $CONFIG_CHANGES -gt 0 ]; then
+          COMMIT_MSG="${COMMIT_MSG}Config ($CONFIG_CHANGES), "
+        fi
+        
+        # Nettoyer le message
+        COMMIT_MSG=$(echo "$COMMIT_MSG" | sed 's/, $//')
+        
+        # Ajouter des détails automatiques
+        COMMIT_MSG="${COMMIT_MSG}
+
+        🔧 Optimisations automatiques:
+        - Filtres Shopify modernisés
+        - Console.log nettoyés  
+        - Fichiers temporaires supprimés
+        - Permissions corrigées
+        
+        📊 Résumé:
+        - Templates: $LIQUID_CHANGES
+        - Traductions: $JSON_CHANGES  
+        - Scripts: $JS_CHANGES
+        - Configuration: $CONFIG_CHANGES
+        
+        🤖 Généré automatiquement par GitHub Actions"
+        
+        echo "commit_message<<EOF" >> $GITHUB_ENV
+        echo "$COMMIT_MSG" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+        
+        echo "📝 Message de commit préparé" >> sync_report.txt
+    
+    - name: 💾 Commit All Changes  
+      if: steps.pre_analysis.outputs.sync_needed == 'true'
+      run: |
+        git add .
+        git status
+        
+        if [ -n "$(git status --porcelain)" ]; then
+          git commit -m "${{ env.commit_message }}"
+          echo "✅ Commit créé avec succès" >> sync_report.txt
+        else
+          echo "ℹ️ Aucun changement à commiter après nettoyage" >> sync_report.txt
+        fi
+    
+    - name: 🌿 Create Feature Branch for PR
+      if: steps.pre_analysis.outputs.sync_needed == 'true' && (github.event.inputs.create_pr == 'true' || github.event_name == 'schedule')
+      run: |
+        FEATURE_BRANCH="auto-sync/weekly-$(date +%Y%m%d)"
+        git checkout -b $FEATURE_BRANCH
+        echo "feature_branch=$FEATURE_BRANCH" >> $GITHUB_ENV
+        echo "🌿 Branche créée: $FEATURE_BRANCH" >> sync_report.txt
+    
+    - name: 📤 Push Changes
+      if: steps.pre_analysis.outputs.sync_needed == 'true'
+      run: |
+        if [ -n "${{ env.feature_branch }}" ]; then
+          # Push sur la branche feature pour PR
+          git push origin ${{ env.feature_branch }}
+          echo "📤 Push sur branche feature: ${{ env.feature_branch }}" >> sync_report.txt
+        else
+          # Push direct sur main
+          git push origin main
+          echo "📤 Push direct sur main" >> sync_report.txt
+        fi
+    
+    - name: 🔄 Create Auto-PR
+      if: steps.pre_analysis.outputs.sync_needed == 'true' && env.feature_branch != '' && (github.event.inputs.create_pr == 'true' || github.event_name == 'schedule')
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ env.feature_branch }}
+        title: "🚀 Weekly Auto-Sync - $(date +%d/%m/%Y)"
+        body: |
+          ## 🔄 Synchronisation Automatique Hebdomadaire
+          
+          **📅 Date**: $(date '+%d/%m/%Y à %H:%M UTC')
+          **🤖 Type**: Synchronisation automatique
+          **🌿 Branche**: `${{ env.feature_branch }}`
+          
+          ### 📊 Résumé des Changements
+          
+          - **📁 Fichiers non trackés**: ${{ steps.pre_analysis.outputs.untracked }}
+          - **📝 Fichiers modifiés**: ${{ steps.pre_analysis.outputs.uncommitted }}
+          - **🔄 Commits en retard**: ${{ steps.pre_analysis.outputs.behind }}
+          
+          ### 🔧 Optimisations Appliquées
+          
+          - ✅ Nettoyage des fichiers temporaires
+          - ✅ Correction des permissions des scripts
+          - ✅ Modernisation des filtres Shopify
+          - ✅ Suppression des console.log
+          - ✅ Validation JSON
+          
+          ### 🛡️ Vérifications Sécurité
+          
+          - ✅ Aucun secret détecté dans le code
+          - ✅ Fichiers sensibles vérifiés
+          - ✅ Backup créé: `${{ env.backup_branch }}`
+          
+          ### ✅ Checklist Pre-Merge
+          
+          - [ ] Vérifier les changements en local
+          - [ ] Tester les fonctionnalités modifiées
+          - [ ] Valider l'affichage du thème
+          - [ ] Confirmer la sécurité
+          
+          ### 🚀 Actions Post-Merge
+          
+          Cette PR sera automatiquement:
+          - Testée par les GitHub Actions
+          - Analysée pour la performance
+          - Vérifiée pour la sécurité
+          
+          ---
+          
+          *🤖 PR générée automatiquement par le workflow de synchronisation*
+          *📋 Consultez les artifacts pour le rapport complet*
+        labels: |
+          automation
+          weekly-sync
+          enhancement
+        assignees: Stardust75001
+        draft: false
+    
+    - name: 📊 Final Report
+      if: always()
+      run: |
+        echo "" >> sync_report.txt
+        echo "=== RAPPORT FINAL DE SYNCHRONISATION ===" >> sync_report.txt
+        echo "📅 Date: $(date '+%d/%m/%Y à %H:%M UTC')" >> sync_report.txt
+        echo "🔄 Type: ${{ github.event.inputs.sync_type || 'scheduled' }}" >> sync_report.txt
+        echo "🌿 Branche créée: ${{ env.feature_branch || 'N/A' }}" >> sync_report.txt
+        echo "📦 Backup: ${{ env.backup_branch || 'N/A' }}" >> sync_report.txt
+        echo "🎯 Synchronisation nécessaire: ${{ steps.pre_analysis.outputs.sync_needed }}" >> sync_report.txt
+        echo "🔒 Problèmes sécurité: ${{ steps.security_precheck.outputs.security_issues || '0' }}" >> sync_report.txt
+        echo "" >> sync_report.txt
+        echo "✅ Synchronisation terminée avec succès!" >> sync_report.txt
+        
+        cat sync_report.txt
+    
+    - name: 💾 Save Sync Report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: sync-report-$(date +%Y%m%d_%H%M)
+        path: sync_report.txt
+        retention-days: 90

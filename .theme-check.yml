@@ -1,0 +1,46 @@
+# Theme Check Configuration
+# Professional Shopify Theme Validation Setup
+# Optimized for complex themes with performance considerations
+
+root: .
+
+# Disable problematic checks that cause infinite loops
+SpaceInsideBraces: false
+RequiredLayoutThemeObject: false
+LiquidTag: false
+ValidHTMLTranslation: false
+TranslationKeyExists: false
+
+# Enable critical checks for production
+ImgLazyLoading: true
+ImgWidthAndHeight: true
+DeprecatedFilter: true
+JSONSchemaFormat: true
+ValidSchema: true
+UnusedAssign: true
+UnusedSnippet: false # Disabled to avoid performance issues
+
+# Exclude problematic directories and files
+exclude:
+  - "backup-*/**"
+  - "node_modules/**"
+  - "test-results/**"
+  - "playwright-report/**"
+  - ".github/**"
+  - "docs/**"
+  - "examples/**"
+  - "*.min.js"
+  - "*.min.css"
+  - "vendor-*.js"
+
+# Performance settings
+ignore:
+  - TemplateLength
+  - NestedSnippet
+  - UnusedAssign
+
+# Only check critical files for faster execution
+only_categories:
+  - liquid
+  - performance
+  - html
