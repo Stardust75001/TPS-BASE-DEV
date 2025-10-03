@@ -11,7 +11,7 @@ cd "/Users/asc/Shopify/TPS BASE DEV"
 # Configuration
 TIMESTAMP=$(date +%Y%m%d-%H%M)
 DEV_THEME_NAME="TPS-DEV-$TIMESTAMP"
-LIVE_THEME_NAME="TPS-LIVE-$TIMESTAMP"
+LIVE_THEME_NAME="tps-base"  # Theme production existant
 
 # Vérifier l'authentification Shopify
 echo "🔍 Vérification authentification Shopify..."
@@ -39,9 +39,9 @@ fi
 echo ""
 echo "📋 PLAN DE DÉPLOIEMENT:"
 echo "──────────────────────────"
-echo "🎯 Store: ${SHOPIFY_STORE_DOMAIN:-'À configurer'}"
+echo "🎯 Store: ${SHOPIFY_STORE_DOMAIN:-'f6d72e-0f.myshopify.com'}"
 echo "🔧 Theme DEV: $DEV_THEME_NAME (unpublished)"
-echo "🚀 Theme LIVE: $LIVE_THEME_NAME (à publier manuellement)"
+echo "🚀 Theme LIVE: $LIVE_THEME_NAME (theme production existant)"
 echo "📅 Timestamp: $TIMESTAMP"
 
 echo ""

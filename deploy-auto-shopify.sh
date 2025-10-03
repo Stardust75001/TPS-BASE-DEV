@@ -11,7 +11,7 @@ cd "/Users/asc/Shopify/TPS BASE DEV"
 # Configuration
 TIMESTAMP=$(date +%Y%m%d-%H%M)
 DEV_THEME_NAME="TPS-DEV-AUTO-$TIMESTAMP"
-LIVE_THEME_NAME="TPS-LIVE-AUTO-$TIMESTAMP"
+LIVE_THEME_NAME="tps-base"  # Theme production existant
 
 echo "📋 DÉPLOIEMENT AUTOMATIQUE:"
 echo "──────────────────────────────"
@@ -43,7 +43,7 @@ if [ -d "$THEME_DIR" ]; then
     echo ""
     echo "🚀 ÉTAPE 2: Déploiement LIVE (production)..."
     echo "─────────────────────────────────────────────"
-    echo "⚠️  ATTENTION: Déploiement en PRODUCTION"
+    echo "⚠️  ATTENTION: Déploiement en PRODUCTION vers theme '$LIVE_THEME_NAME'"
 
     if shopify theme push --theme="$LIVE_THEME_NAME" --store=f6d72e-0f.myshopify.com; then
         echo "✅ Déploiement LIVE réussi!"

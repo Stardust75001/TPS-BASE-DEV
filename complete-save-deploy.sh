@@ -140,10 +140,10 @@ if [[ $deploy_live_choice =~ ^[Yy]$ ]]; then
     read -p "Confirmer PRODUCTION (tapez 'CONFIRM'): " confirm_prod
 
     if [ "$confirm_prod" = "CONFIRM" ]; then
-        LIVE_THEME="TPS-LIVE-$(date +%m%d-%H%M)"
-        echo "   ├── Déploiement LIVE: $LIVE_THEME"
+        LIVE_THEME="tps-base"  # Theme production existant
+        echo "   ├── Déploiement LIVE vers theme existant: $LIVE_THEME"
 
-        shopify theme push --unpublished --theme="$LIVE_THEME"
+        shopify theme push --theme="$LIVE_THEME"
 
         if [ $? -eq 0 ]; then
             echo "   └── ✅ Déploiement LIVE réussi: $LIVE_THEME"
@@ -183,7 +183,7 @@ else
 fi
 
 if [ "$LIVE_SUCCESS" = true ]; then
-    echo "✅ Shopify LIVE: Déployé ($LIVE_THEME) - À publier manuellement"
+    echo "✅ Shopify LIVE: Mis à jour ($LIVE_THEME) - Theme production"
 elif [ "$LIVE_SUCCESS" = "skipped" ]; then
     echo "⏭️ Shopify LIVE: Ignoré par l'utilisateur"
 else
