@@ -48,16 +48,16 @@ jobs:
         if: ${{ inputs.check_type == 'complete' || inputs.check_type == 'sitemap_only' }}
         run: |
           echo "🗺️ Analyse du sitemap..."
-          
+
           # Télécharger et analyser le sitemap
           curl -sS "$SITEMAP_URL" > "reports/seo/$TIMESTAMP/sitemap.xml"
-          
+
           # Compter les URLs
           URL_COUNT=$(grep -o '<url>' "reports/seo/$TIMESTAMP/sitemap.xml" | wc -l)
-          
+
           # Extraire les URLs principales
           grep -oP '(?<=<loc>).*?(?=</loc>)' "reports/seo/$TIMESTAMP/sitemap.xml" | head -20 > "reports/seo/$TIMESTAMP/sample_urls.txt"
-          
+
           echo "SITEMAP_URL_COUNT=$URL_COUNT" >> $GITHUB_ENV
           echo "✅ Sitemap analysé: $URL_COUNT URLs trouvées"
 
@@ -65,9 +65,9 @@ jobs:
         if: ${{ inputs.check_type == 'complete' || inputs.check_type == 'sitemap_only' }}
         run: |
           echo "🤖 Vérification robots.txt..."
-          
+
           curl -sS "$ROBOTS_URL" > "reports/seo/$TIMESTAMP/robots.txt"
-          
+
           # Vérifier si le sitemap est référencé
           if grep -q "Sitemap:" "reports/seo/$TIMESTAMP/robots.txt"; then
             echo "ROBOTS_HAS_SITEMAP=true" >> $GITHUB_ENV
@@ -81,26 +81,26 @@ jobs:
         if: ${{ inputs.check_type == 'complete' || inputs.check_type == 'performance_only' }}
         run: |
           echo "⚡ Audit de performance..."
-          
+
           # Test de la page d'accueil
           if [[ -n "$GOOGLE_PSI_API_KEY" ]]; then
             echo "Testing homepage performance..."
-            
+
             psi_url="https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${SITE_ORIGIN}&key=${GOOGLE_PSI_API_KEY}&strategy=mobile"
             response=$(curl -s "$psi_url")
-            
+
             # Extraire les métriques
             performance_score=$(echo "$response" | jq -r '.lighthouseResult.categories.performance.score // 0' | awk '{print int($1 * 100)}')
             accessibility_score=$(echo "$response" | jq -r '.lighthouseResult.categories.accessibility.score // 0' | awk '{print int($1 * 100)}')
             seo_score=$(echo "$response" | jq -r '.lighthouseResult.categories.seo.score // 0' | awk '{print int($1 * 100)}')
-            
+
             echo "PERFORMANCE_SCORE=$performance_score" >> $GITHUB_ENV
             echo "ACCESSIBILITY_SCORE=$accessibility_score" >> $GITHUB_ENV
             echo "SEO_SCORE=$seo_score" >> $GITHUB_ENV
-            
+
             # Sauvegarder le rapport complet
             echo "$response" > "reports/seo/$TIMESTAMP/psi_report.json"
-            
+
             echo "📊 Scores - Performance: $performance_score, Accessibilité: $accessibility_score, SEO: $seo_score"
           else
             echo "⚠️ Google PSI API Key non configurée"
@@ -110,7 +110,7 @@ jobs:
         if: ${{ inputs.check_type == 'complete' }}
         run: |
           echo "🔍 Test d'URLs échantillon..."
-          
+
           # Tester les 10 premières URLs du sitemap
           if [[ -f "reports/seo/$TIMESTAMP/sample_urls.txt" ]]; then
             while IFS= read -r url && [[ $((++count)) -le 10 ]]; do
@@ -127,69 +127,69 @@ jobs:
       - name: 📊 Generate SEO Report
         run: |
           echo "📊 Génération du rapport SEO..."
-          
+
           cat > "reports/seo/$TIMESTAMP/SEO_REPORT.md" << EOF
           # 🗺️ RAPPORT SEO & SITEMAP - TPS BASE DEV
-          
+
           **Date:** $REPORT_DATE
           **Store:** $SHOPIFY_STORE
           **Type d'audit:** ${{ inputs.check_type || 'complete' }}
-          
+
           ## 🗺️ Sitemap Analysis
-          
+
           - **URL:** $SITEMAP_URL
           - **Nombre d'URLs:** ${SITEMAP_URL_COUNT:-'Non analysé'}
           - **Status:** $(curl -s -o /dev/null -w '%{http_code}' "$SITEMAP_URL")
-          
+
           ## 🤖 Robots.txt
-          
-          - **URL:** $ROBOTS_URL  
+
+          - **URL:** $ROBOTS_URL
           - **Sitemap référencé:** ${ROBOTS_HAS_SITEMAP:-'Non vérifié'}
           - **Status:** $(curl -s -o /dev/null -w '%{http_code}' "$ROBOTS_URL")
-          
+
           ## ⚡ Performance Scores (Mobile)
-          
+
           $(if [[ -n "${PERFORMANCE_SCORE:-}" ]]; then
             echo "- **Performance:** ${PERFORMANCE_SCORE}/100"
-            echo "- **Accessibilité:** ${ACCESSIBILITY_SCORE}/100"  
+            echo "- **Accessibilité:** ${ACCESSIBILITY_SCORE}/100"
             echo "- **SEO:** ${SEO_SCORE}/100"
           else
             echo "- Performance non testée (API Key manquante)"
           fi)
-          
+
           ## 🎯 Recommandations
-          
+
           $(if [[ "${PERFORMANCE_SCORE:-0}" -lt 70 ]]; then
             echo "- ⚠️ Performance à améliorer (< 70/100)"
           else
             echo "- ✅ Performance acceptable"
           fi)
-          
+
           $(if [[ "${SEO_SCORE:-0}" -lt 90 ]]; then
             echo "- ⚠️ SEO à optimiser (< 90/100)"
           else
             echo "- ✅ SEO optimal"
           fi)
-          
+
           $(if [[ "${ROBOTS_HAS_SITEMAP}" != "true" ]]; then
             echo "- ⚠️ Ajouter la référence sitemap dans robots.txt"
           else
             echo "- ✅ Robots.txt correctement configuré"
           fi)
-          
+
           ## 📈 Actions Suggérées
-          
+
           1. Vérifier régulièrement la validité du sitemap
           2. Surveiller les scores de performance
           3. Optimiser les images et ressources
           4. Maintenir les bonnes pratiques SEO
-          
+
           ---
-          
+
           **Prochain audit:** $(date -d '+7 days' '+%Y-%m-%d')
           **Généré automatiquement par GitHub Actions**
           EOF
-          
+
           echo "✅ Rapport SEO généré"
 
       - name: 📤 Upload SEO Report
@@ -206,12 +206,12 @@ jobs:
           echo "**🗓️ Date:** $REPORT_DATE" >> $GITHUB_STEP_SUMMARY
           echo "**🏪 Store:** $SHOPIFY_STORE" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 🗺️ Sitemap" >> $GITHUB_STEP_SUMMARY
           echo "- URLs trouvées: ${SITEMAP_URL_COUNT:-'Non analysé'}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: $(curl -s -o /dev/null -w '%{http_code}' "$SITEMAP_URL")" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ -n "${PERFORMANCE_SCORE:-}" ]]; then
             echo "### ⚡ Performance (Mobile)" >> $GITHUB_STEP_SUMMARY
             echo "- Performance: ${PERFORMANCE_SCORE}/100" >> $GITHUB_STEP_SUMMARY
@@ -219,5 +219,5 @@ jobs:
             echo "- SEO: ${SEO_SCORE}/100" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "✅ **Rapport détaillé disponible dans les Artifacts**" >> $GITHUB_STEP_SUMMARY

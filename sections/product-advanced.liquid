@@ -11,22 +11,22 @@ Section produit avancée avec galerie interactive et blocs dynamiques
         {% if product.images.size > 0 %}
           <div class="product-gallery">
             <div class="main-image mb-3 text-center">
-              <img id="main-product-image"
+              <img id="main-product-image" width="600" height="600" width="600" height="600" width="600" height="600"
                    src="{{ product.featured_image | img_url: '1024x1024' }}"
                    alt="{{ product.title }}"
                    class="img-fluid rounded"
                    style="max-height: 500px; object-fit: contain; cursor: zoom-in;"
-                   onclick="openImagePopup('{{ product.featured_image | img_url: 'master' }}')">
+                   onclick="openImagePopup('{{ product.featured_image | image_url: width: 800 }}')">
             </div>
             {% if product.images.size > 1 %}
               <div class="thumbnail-images d-flex flex-wrap justify-content-center gap-2">
                 {% for image in product.images %}
-                  <img src="{{ image | img_url: '100x100' }}"
+                  <img src="{{ image | image_url: width: 100, height: 100 }}"
                        alt="{{ product.title }}"
                        class="img-thumbnail"
                        style="width: 60px; height: 60px; object-fit: cover; cursor: pointer;"
                        onclick="document.getElementById('main-product-image').src='{{ image | img_url: '1024x1024' }}';
-                                document.getElementById('main-product-image').setAttribute('onclick', 'openImagePopup(\\'{{ image | img_url: 'master' }}\\')');">
+                                document.getElementById('main-product-image').setAttribute('onclick', 'openImagePopup(\\'{{ image | image_url: width: 800 }}\\')');">
                 {% endfor %}
               </div>
             {% endif %}
@@ -158,65 +158,179 @@ Section produit avancée avec galerie interactive et blocs dynamiques
 
 {% schema %}
 {
-  "name": "Produit avancé",
-  "settings": [
-    {
-      "type": "text",
-      "id": "container",
-      "label": "Classe container",
-      "default": "container"
-    },
-    {
-      "type": "range",
-      "id": "pt",
-      "label": "Padding top",
-      "min": 0, "max": 20, "step": 1, "default": 5
-    },
-    {
-      "type": "range",
-      "id": "pb",
-      "label": "Padding bottom",
-      "min": 0, "max": 20, "step": 1, "default": 5
-    }
-  ],
-  "blocks": [
-    { "type": "vendor", "name": "Vendeur", "limit": 1, "settings": [] },
-    { "type": "title", "name": "Titre", "limit": 1, "settings": [
-      { "type": "select", "id": "title_size", "label": "Taille du titre", "default": "h1",
-        "options": [ { "value": "h1", "label": "H1" }, { "value": "h2", "label": "H2" }, { "value": "h3", "label": "H3" } ]
-      }
-    ]},
-    { "type": "price", "name": "Prix", "limit": 1, "settings": [
-      { "type": "select", "id": "price_size", "label": "Taille du prix", "default": "h4",
-        "options": [ { "value": "h3", "label": "Large" }, { "value": "h4", "label": "Moyen" }, { "value": "h5", "label": "Petit" } ]
-      }
-    ]},
-    { "type": "description", "name": "Description", "limit": 1, "settings": [] },
-    { "type": "variants", "name": "Sélecteur de variantes", "limit": 1, "settings": [] },
-    { "type": "buy_buttons", "name": "Boutons d'achat", "limit": 1, "settings": [
-      { "type": "text", "id": "button_text", "label": "Texte du bouton", "default": "Ajouter au panier" }
-    ]},
-    { "type": "trust_badges", "name": "Badges de confiance", "limit": 1, "settings": [] },
-    { "type": "custom_text", "name": "Texte personnalisé", "settings": [
-      { "type": "richtext", "id": "text", "label": "Texte" }
-    ]},
-    { "type": "spacer", "name": "Espacement", "settings": [
-      { "type": "range", "id": "space_size", "label": "Taille de l'espacement", "min": 1, "max": 10, "step": 1, "default": 3 }
-    ]}
-  ],
-  "presets": [
-    {
-      "name": "Produit avancé",
-      "blocks": [
-        { "type": "vendor" },
-        { "type": "title" },
-        { "type": "price" },
-        { "type": "description" },
-        { "type": "variants" },
-        { "type": "buy_buttons" },
-        { "type": "trust_badges" }
-      ]
-    }
-  ]
+	"name": "Produit avancé",
+	"settings": [
+		{
+			"type": "text",
+			"id": "container",
+			"label": "Classe container",
+			"default": "container"
+		},
+		{
+			"type": "range",
+			"id": "pt",
+			"label": "Padding top",
+			"min": 0,
+			"max": 20,
+			"step": 1,
+			"default": 5
+		},
+		{
+			"type": "range",
+			"id": "pb",
+			"label": "Padding bottom",
+			"min": 0,
+			"max": 20,
+			"step": 1,
+			"default": 5
+		}
+	],
+	"blocks": [
+		{
+			"type": "vendor",
+			"name": "Vendeur",
+			"limit": 1,
+			"settings": []
+		},
+		{
+			"type": "title",
+			"name": "Titre",
+			"limit": 1,
+			"settings": [
+				{
+					"type": "select",
+					"id": "title_size",
+					"label": "Taille du titre",
+					"default": "h1",
+					"options": [
+						{
+							"value": "h1",
+							"label": "H1"
+						},
+						{
+							"value": "h2",
+							"label": "H2"
+						},
+						{
+							"value": "h3",
+							"label": "H3"
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "price",
+			"name": "Prix",
+			"limit": 1,
+			"settings": [
+				{
+					"type": "select",
+					"id": "price_size",
+					"label": "Taille du prix",
+					"default": "h4",
+					"options": [
+						{
+							"value": "h3",
+							"label": "Large"
+						},
+						{
+							"value": "h4",
+							"label": "Moyen"
+						},
+						{
+							"value": "h5",
+							"label": "Petit"
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "description",
+			"name": "Description",
+			"limit": 1,
+			"settings": []
+		},
+		{
+			"type": "variants",
+			"name": "Sélecteur de variantes",
+			"limit": 1,
+			"settings": []
+		},
+		{
+			"type": "buy_buttons",
+			"name": "Boutons d'achat",
+			"limit": 1,
+			"settings": [
+				{
+					"type": "text",
+					"id": "button_text",
+					"label": "Texte du bouton",
+					"default": "Ajouter au panier"
+				}
+			]
+		},
+		{
+			"type": "trust_badges",
+			"name": "Badges de confiance",
+			"limit": 1,
+			"settings": []
+		},
+		{
+			"type": "custom_text",
+			"name": "Texte personnalisé",
+			"settings": [
+				{
+					"type": "richtext",
+					"id": "text",
+					"label": "Texte"
+				}
+			]
+		},
+		{
+			"type": "spacer",
+			"name": "Espacement",
+			"settings": [
+				{
+					"type": "range",
+					"id": "space_size",
+					"label": "Taille de l'espacement",
+					"min": 1,
+					"max": 10,
+					"step": 1,
+					"default": 3
+				}
+			]
+		}
+	],
+	"presets": [
+		{
+			"name": "Produit avancé",
+			"blocks": [
+				{
+					"type": "vendor"
+				},
+				{
+					"type": "title"
+				},
+				{
+					"type": "price"
+				},
+				{
+					"type": "description"
+				},
+				{
+					"type": "variants"
+				},
+				{
+					"type": "buy_buttons"
+				},
+				{
+					"type": "trust_badges"
+				}
+			]
+		}
+	]
 }
 {% endschema %}

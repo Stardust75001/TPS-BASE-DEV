@@ -48,14 +48,14 @@ configure_secret() {
     local name="$1"
     local value="$2"
     local description="$3"
-    
+
     if [[ -n "$value" ]]; then
         echo -e "${BLUE}📝 Configuration: $name${NC}"
         echo "   Description: $description"
-        
+
         # Configurer le secret (masque la valeur)
         echo "$value" | gh secret set "$name" --body -
-        
+
         if [[ $? -eq 0 ]]; then
             echo -e "${GREEN}   ✅ Secret configuré${NC}"
         else
@@ -111,7 +111,7 @@ echo ""
 echo "1. 🔄 Vérifier que tous les secrets sont présents:"
 echo "   Repository → Settings → Secrets and variables → Actions"
 echo ""
-echo "2. ✅ Activer les workflows GitHub Actions:"  
+echo "2. ✅ Activer les workflows GitHub Actions:"
 echo "   Repository → Actions → Enable workflows"
 echo ""
 echo "3. 🧪 Tester un workflow manuellement:"
@@ -138,7 +138,7 @@ $(gh secret list --json name,updatedAt | jq -r '.[] | "- **\(.name)** - Mis à j
 ## 📊 Workflows Disponibles
 
 1. **CI/CD Principal** - Build, tests, déploiement
-2. **Backup Hebdomadaire** - Sauvegarde automatique  
+2. **Backup Hebdomadaire** - Sauvegarde automatique
 3. **SEO & Sitemap** - Audit SEO hebdomadaire
 4. **Monitoring Quotidien** - Surveillance continue
 

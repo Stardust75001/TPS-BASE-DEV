@@ -36,7 +36,7 @@ jobs:
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-      
+
       - name: 🔍 Validate Structure
         run: |
           echo "✅ Validation de la structure TPS BASE DEV"
@@ -78,7 +78,7 @@ jobs:
         run: |
           echo "🔍 Test robots.txt..."
           curl -sSf "${ROBOTS_URL}" > /dev/null && echo "✅ robots.txt OK" || echo "⚠️ robots.txt inaccessible"
-          
+
           echo "🔍 Test sitemap.xml..."
           curl -sSf "${SITEMAP_URL}" > /dev/null && echo "✅ sitemap.xml OK" || echo "⚠️ sitemap.xml inaccessible"
 
@@ -117,10 +117,10 @@ jobs:
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-      
+
       - name: 📦 Install Shopify CLI
         run: npm i -g @shopify/cli @shopify/theme
-      
+
       - name: 🔍 Theme Check
         run: |
           echo "🔍 Vérification du thème Shopify..."
@@ -157,18 +157,18 @@ jobs:
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-        
+
       - name: 💾 Backup Theme & Settings
         run: |
           echo "💾 Création de la sauvegarde..."
           mkdir -p backups/$(date +%Y%m%d_%H%M%S)
-          
+
           # Backup du thème principal
           curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
             "https://${SHOPIFY_STORE}/admin/api/2024-10/themes.json" > backups/themes_$(date +%Y%m%d).json
-          
+
           echo "✅ Sauvegarde créée dans backups/"
-      
+
       - name: 📤 Upload Backup Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -189,10 +189,10 @@ jobs:
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-      
+
       - name: 📦 Install Shopify CLI
         run: npm i -g @shopify/cli @shopify/theme
-      
+
       - name: 🚀 Push Theme
         run: |
           echo "🚀 Déploiement du thème..."
@@ -215,10 +215,10 @@ jobs:
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-      
+
       - name: 📦 Install Shopify CLI
         run: npm i -g @shopify/cli @shopify/theme
-      
+
       - name: 🎯 Push Theme (Manuel)
         run: |
           echo "🎯 Déploiement manuel du thème..."

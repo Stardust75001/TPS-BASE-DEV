@@ -1,0 +1,304 @@
+name: 📊 Analytics Validation
+
+on:
+  schedule:
+    # Tous les jours à 10h00 UTC (11h00 CET)
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    inputs:
+      validation_type:
+        description: "Type de validation analytics"
+        required: true
+        default: 'complete'
+        type: choice
+        options:
+        - complete
+        - gtm_only
+        - ga4_only
+        - pixels_only
+        - quick_check
+
+env:
+  SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+  SITE_ORIGIN: https://${{ secrets.SHOPIFY_STORE }}
+  GTM_ID: ${{ secrets.GTM_ID }}
+  GA4_ID: ${{ secrets.GA4_ID }}
+
+jobs:
+  analytics-validation:
+    name: "📊 Validation Suite Analytics"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🗓️ Generate Report Timestamp
+        id: timestamp
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+
+      - name: 📁 Create Reports Directory
+        run: mkdir -p "reports/analytics/$TIMESTAMP"
+
+      - name: 🎯 Test GTM Implementation
+        if: ${{ inputs.validation_type == 'complete' || inputs.validation_type == 'gtm_only' }}
+        run: |
+          echo "🎯 Validation Google Tag Manager..."
+
+          # Télécharger la page d'accueil
+          curl -s "$SITE_ORIGIN/" > "reports/analytics/$TIMESTAMP/homepage.html"
+
+          # Vérifier présence GTM
+          if grep -q "googletagmanager.com/gtm.js" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "GTM_SCRIPT_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ Script GTM détecté"
+          else
+            echo "GTM_SCRIPT_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ Script GTM non détecté"
+          fi
+
+          # Vérifier noscript GTM
+          if grep -q "googletagmanager.com/ns.html" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "GTM_NOSCRIPT_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ Noscript GTM détecté"
+          else
+            echo "GTM_NOSCRIPT_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ Noscript GTM non détecté"
+          fi
+
+          # Vérifier ID GTM correct
+          if grep -q "$GTM_ID" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "GTM_ID_CORRECT=true" >> $GITHUB_ENV
+            echo "✅ GTM ID correct: $GTM_ID"
+          else
+            echo "GTM_ID_CORRECT=false" >> $GITHUB_ENV
+            echo "❌ GTM ID incorrect ou absent"
+          fi
+
+      - name: 📈 Test GA4 Implementation
+        if: ${{ inputs.validation_type == 'complete' || inputs.validation_type == 'ga4_only' }}
+        run: |
+          echo "📈 Validation Google Analytics 4..."
+
+          # Vérifier script GA4
+          if grep -q "gtag.*config.*$GA4_ID" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "GA4_CONFIG_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ Configuration GA4 détectée: $GA4_ID"
+          else
+            echo "GA4_CONFIG_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ Configuration GA4 non détectée"
+          fi
+
+          # Vérifier gtag.js
+          if grep -q "googletagmanager.com/gtag/js" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "GTAG_SCRIPT_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ Script gtag.js détecté"
+          else
+            echo "GTAG_SCRIPT_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ Script gtag.js non détecté"
+          fi
+
+      - name: 📱 Test Social Pixels
+        if: ${{ inputs.validation_type == 'complete' || inputs.validation_type == 'pixels_only' }}
+        run: |
+          echo "📱 Validation pixels réseaux sociaux..."
+
+          # Facebook Pixel
+          if grep -q "connect.facebook.net" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "FB_PIXEL_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ Facebook Pixel détecté"
+          else
+            echo "FB_PIXEL_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ Facebook Pixel non détecté"
+          fi
+
+          # TikTok Pixel
+          if grep -q "analytics.tiktok.com" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "TIKTOK_PIXEL_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ TikTok Pixel détecté"
+          else
+            echo "TIKTOK_PIXEL_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ TikTok Pixel non détecté"
+          fi
+
+          # Pinterest Tag
+          if grep -q "pintrk" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "PINTEREST_TAG_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ Pinterest Tag détecté"
+          else
+            echo "PINTEREST_TAG_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ Pinterest Tag non détecté"
+          fi
+
+      - name: 🎨 Test TPS Analytics Suite
+        if: ${{ inputs.validation_type == 'complete' }}
+        run: |
+          echo "🎨 Validation TPS Analytics Suite..."
+
+          # Analytics config manager
+          if grep -q "analytics-config-manager" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "TPS_ANALYTICS_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ TPS Analytics Suite détecté"
+          else
+            echo "TPS_ANALYTICS_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ TPS Analytics Suite non détecté"
+          fi
+
+          # E-commerce tracking
+          if grep -q "ecommerce-tracking" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            echo "ECOMMERCE_TRACKING_PRESENT=true" >> $GITHUB_ENV
+            echo "✅ E-commerce Tracking détecté"
+          else
+            echo "ECOMMERCE_TRACKING_PRESENT=false" >> $GITHUB_ENV
+            echo "❌ E-commerce Tracking non détecté"
+          fi
+
+      - name: 🔍 Quick Health Check
+        if: ${{ inputs.validation_type == 'quick_check' }}
+        run: |
+          echo "🔍 Vérification rapide..."
+
+          # Test basique de présence analytics
+          analytics_count=0
+
+          if grep -q "gtag\|fbq\|analytics" "reports/analytics/$TIMESTAMP/homepage.html"; then
+            analytics_count=$((analytics_count + 1))
+          fi
+
+          echo "QUICK_ANALYTICS_COUNT=$analytics_count" >> $GITHUB_ENV
+          echo "📊 $analytics_count service(s) analytics détecté(s)"
+
+      - name: 📊 Generate Analytics Report
+        run: |
+          echo "📊 Génération du rapport analytics..."
+
+          cat > "reports/analytics/$TIMESTAMP/ANALYTICS_REPORT.md" << EOF
+          # 📊 RAPPORT VALIDATION ANALYTICS - TPS BASE DEV
+
+          **Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')
+          **Store:** $SHOPIFY_STORE
+          **Type:** ${{ inputs.validation_type || 'complete' }}
+
+          ## 🎯 Google Tag Manager
+
+          - **Script GTM:** ${GTM_SCRIPT_PRESENT:-'Non testé'}
+          - **Noscript GTM:** ${GTM_NOSCRIPT_PRESENT:-'Non testé'}
+          - **ID GTM Correct:** ${GTM_ID_CORRECT:-'Non testé'}
+          - **ID Attendu:** $GTM_ID
+
+          ## 📈 Google Analytics 4
+
+          - **Configuration GA4:** ${GA4_CONFIG_PRESENT:-'Non testé'}
+          - **Script gtag.js:** ${GTAG_SCRIPT_PRESENT:-'Non testé'}
+          - **ID Attendu:** $GA4_ID
+
+          ## 📱 Pixels Réseaux Sociaux
+
+          - **Facebook Pixel:** ${FB_PIXEL_PRESENT:-'Non testé'}
+          - **TikTok Pixel:** ${TIKTOK_PIXEL_PRESENT:-'Non testé'}
+          - **Pinterest Tag:** ${PINTEREST_TAG_PRESENT:-'Non testé'}
+
+          ## 🎨 TPS Analytics Suite
+
+          - **Analytics Manager:** ${TPS_ANALYTICS_PRESENT:-'Non testé'}
+          - **E-commerce Tracking:** ${ECOMMERCE_TRACKING_PRESENT:-'Non testé'}
+
+          ## ✅ Score Global
+
+          $(total=0; success=0
+          for var in GTM_SCRIPT_PRESENT GTM_ID_CORRECT GA4_CONFIG_PRESENT FB_PIXEL_PRESENT TPS_ANALYTICS_PRESENT; do
+            value=$(printenv $var 2>/dev/null || echo "false")
+            if [[ "$value" != "Non testé" ]]; then
+              total=$((total + 1))
+              if [[ "$value" == "true" ]]; then
+                success=$((success + 1))
+              fi
+            fi
+          done
+          if [[ $total -gt 0 ]]; then
+            score=$((success * 100 / total))
+            echo "**Score Analytics:** $success/$total ($score%)"
+            if [[ $score -ge 80 ]]; then
+              echo "✅ **Excellent - Analytics bien configuré**"
+            elif [[ $score -ge 60 ]]; then
+              echo "⚠️ **Bon - Quelques améliorations possibles**"
+            else
+              echo "❌ **Critique - Configuration incomplète**"
+            fi
+          else
+            echo "**Score:** Non calculé"
+          fi)
+
+          ## 🎯 Recommandations
+
+          $(if [[ "${GTM_SCRIPT_PRESENT:-false}" != "true" ]]; then
+            echo "- ⚠️ Configurer Google Tag Manager"
+          fi
+          if [[ "${GA4_CONFIG_PRESENT:-false}" != "true" ]]; then
+            echo "- ⚠️ Vérifier la configuration GA4"
+          fi
+          if [[ "${FB_PIXEL_PRESENT:-false}" != "true" ]]; then
+            echo "- ⚠️ Installer Facebook Pixel"
+          fi
+          if [[ "${TPS_ANALYTICS_PRESENT:-false}" != "true" ]]; then
+            echo "- ⚠️ Activer TPS Analytics Suite"
+          fi)
+
+          ---
+
+          **Prochain audit:** $(date -d '+1 day' '+%Y-%m-%d')
+          **Généré automatiquement par GitHub Actions**
+          EOF
+
+          echo "✅ Rapport analytics généré"
+
+      - name: 📤 Upload Analytics Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: analytics-report-${{ env.TIMESTAMP }}
+          path: reports/analytics/${{ env.TIMESTAMP }}/
+          retention-days: 30
+
+      - name: 📝 Display Summary
+        run: |
+          echo "## 📊 Validation Analytics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🗓️ Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**🏪 Store:** $SHOPIFY_STORE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🎯 Google Tag Manager" >> $GITHUB_STEP_SUMMARY
+          echo "- Script: $(if [[ "${GTM_SCRIPT_PRESENT:-false}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
+          echo "- ID Correct: $(if [[ "${GTM_ID_CORRECT:-false}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📈 Analytics & Pixels" >> $GITHUB_STEP_SUMMARY
+          echo "- GA4: $(if [[ "${GA4_CONFIG_PRESENT:-false}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
+          echo "- Facebook: $(if [[ "${FB_PIXEL_PRESENT:-false}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
+          echo "- TPS Suite: $(if [[ "${TPS_ANALYTICS_PRESENT:-false}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Calculer le score global
+          total=0; success=0
+          for var in GTM_SCRIPT_PRESENT GTM_ID_CORRECT GA4_CONFIG_PRESENT FB_PIXEL_PRESENT TPS_ANALYTICS_PRESENT; do
+            value=$(printenv $var 2>/dev/null || echo "false")
+            if [[ "$value" != "Non testé" ]]; then
+              total=$((total + 1))
+              if [[ "$value" == "true" ]]; then
+                success=$((success + 1))
+              fi
+            fi
+          done
+
+          if [[ $total -gt 0 ]]; then
+            score=$((success * 100 / total))
+            echo "**📊 Score Global:** $success/$total ($score%)" >> $GITHUB_STEP_SUMMARY
+            if [[ $score -ge 80 ]]; then
+              echo "✅ **Configuration analytics excellente**" >> $GITHUB_STEP_SUMMARY
+            elif [[ $score -ge 60 ]]; then
+              echo "⚠️ **Configuration analytics à améliorer**" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ **Configuration analytics critique**" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi

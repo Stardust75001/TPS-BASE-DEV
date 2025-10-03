@@ -3,9 +3,16 @@
 echo "🚀 PUSH TPS BASE DEV VERS SHOPIFY - PREVIEW"
 echo "==========================================="
 
-# Configuration
-export SHOPIFY_CLI_THEME_TOKEN="shptka_fa39897a2dfff10b4ae7bfff3a5f6c05"
-STORE="f6d72e-0f.myshopify.com"
+# Configuration - Charger depuis .env
+if [ -f .env ]; then
+    source .env
+    export SHOPIFY_CLI_THEME_TOKEN="${SHOPIFY_CLI_THEME_TOKEN}"
+else
+    echo "❌ Fichier .env non trouvé"
+    exit 1
+fi
+
+STORE="${SHOPIFY_STORE_DOMAIN}"
 THEME_NAME="TPS-BASE-DEV-Preview-$(date +%m%d-%H%M)"
 
 echo "📦 Store: $STORE"
@@ -18,10 +25,10 @@ shopify theme list --store="$STORE" --json > themes.json 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✅ Connexion Shopify OK"
-    
+
     echo "📤 Push du thème vers Shopify..."
     shopify theme push --store="$STORE" --theme="$THEME_NAME" --allow-live
-    
+
     if [ $? -eq 0 ]; then
         echo ""
         echo "🎉 SUCCÈS ! Thème poussé avec succès"

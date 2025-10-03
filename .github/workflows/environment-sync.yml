@@ -1,0 +1,357 @@
+name: 🔄 Environment Sync
+
+on:
+  schedule:
+    # Tous les dimanche à 02h00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      sync_direction:
+        description: "Direction de synchronisation"
+        required: true
+        default: 'dev_to_staging'
+        type: choice
+        options:
+        - dev_to_staging
+        - staging_to_prod
+        - full_sync
+        - backup_only
+      environment_target:
+        description: "Environnement cible"
+        required: false
+        type: choice
+        options:
+        - staging
+        - production
+        - all
+
+env:
+  SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
+  SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+  SHOPIFY_STORE_STAGING: ${{ secrets.SHOPIFY_STORE_STAGING }}
+  SHOPIFY_STORE_PROD: ${{ secrets.SHOPIFY_STORE_PROD }}
+
+jobs:
+  environment-sync:
+    name: "🔄 Synchronisation Environnements"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🛠️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: |
+          npm install -g @shopify/cli @shopify/theme
+          npm install
+
+      - name: 🗓️ Generate Sync Timestamp
+        id: timestamp
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          mkdir -p "sync-reports/$TIMESTAMP"
+
+      - name: 🏪 Validate Store Connections
+        run: |
+          echo "🏪 Validation des connexions stores..."
+
+          stores_validated=0
+          total_stores=0
+
+          # Tester DEV store
+          if [[ -n "$SHOPIFY_STORE" ]]; then
+            total_stores=$((total_stores + 1))
+            echo "🔍 Test connexion DEV: $SHOPIFY_STORE"
+            if shopify theme list --store="$SHOPIFY_STORE" > /dev/null 2>&1; then
+              echo "✅ DEV store accessible"
+              stores_validated=$((stores_validated + 1))
+              echo "DEV_STORE_OK=true" >> $GITHUB_ENV
+            else
+              echo "❌ DEV store inaccessible"
+              echo "DEV_STORE_OK=false" >> $GITHUB_ENV
+            fi
+          fi
+
+          # Tester STAGING store
+          if [[ -n "$SHOPIFY_STORE_STAGING" ]]; then
+            total_stores=$((total_stores + 1))
+            echo "🔍 Test connexion STAGING: $SHOPIFY_STORE_STAGING"
+            if shopify theme list --store="$SHOPIFY_STORE_STAGING" > /dev/null 2>&1; then
+              echo "✅ STAGING store accessible"
+              stores_validated=$((stores_validated + 1))
+              echo "STAGING_STORE_OK=true" >> $GITHUB_ENV
+            else
+              echo "❌ STAGING store inaccessible"
+              echo "STAGING_STORE_OK=false" >> $GITHUB_ENV
+            fi
+          fi
+
+          # Tester PROD store
+          if [[ -n "$SHOPIFY_STORE_PROD" ]]; then
+            total_stores=$((total_stores + 1))
+            echo "🔍 Test connexion PROD: $SHOPIFY_STORE_PROD"
+            if shopify theme list --store="$SHOPIFY_STORE_PROD" > /dev/null 2>&1; then
+              echo "✅ PROD store accessible"
+              stores_validated=$((stores_validated + 1))
+              echo "PROD_STORE_OK=true" >> $GITHUB_ENV
+            else
+              echo "❌ PROD store inaccessible"
+              echo "PROD_STORE_OK=false" >> $GITHUB_ENV
+            fi
+          fi
+
+          echo "STORES_VALIDATED=$stores_validated" >> $GITHUB_ENV
+          echo "TOTAL_STORES=$total_stores" >> $GITHUB_ENV
+          echo "📊 Stores validés: $stores_validated/$total_stores"
+
+      - name: 💾 Create Environment Backup
+        if: ${{ inputs.sync_direction != 'backup_only' }}
+        run: |
+          echo "💾 Création backup des environnements..."
+
+          backup_date=$(date +%Y%m%d_%H%M%S)
+          mkdir -p "backups/environments/$backup_date"
+
+          # Backup DEV
+          if [[ "${DEV_STORE_OK:-false}" == "true" ]]; then
+            echo "📥 Backup DEV environment..."
+            shopify theme pull --store="$SHOPIFY_STORE" --path="backups/environments/$backup_date/dev" --live || true
+          fi
+
+          # Backup STAGING
+          if [[ "${STAGING_STORE_OK:-false}" == "true" && -n "$SHOPIFY_STORE_STAGING" ]]; then
+            echo "📥 Backup STAGING environment..."
+            shopify theme pull --store="$SHOPIFY_STORE_STAGING" --path="backups/environments/$backup_date/staging" --live || true
+          fi
+
+          # Backup PROD
+          if [[ "${PROD_STORE_OK:-false}" == "true" && -n "$SHOPIFY_STORE_PROD" ]]; then
+            echo "📥 Backup PROD environment..."
+            shopify theme pull --store="$SHOPIFY_STORE_PROD" --path="backups/environments/$backup_date/production" --live || true
+          fi
+
+          echo "BACKUP_PATH=backups/environments/$backup_date" >> $GITHUB_ENV
+
+      - name: 🚀 DEV to STAGING Sync
+        if: ${{ inputs.sync_direction == 'dev_to_staging' || inputs.sync_direction == 'full_sync' }}
+        run: |
+          echo "🚀 Synchronisation DEV → STAGING..."
+
+          if [[ "${DEV_STORE_OK:-false}" == "true" && "${STAGING_STORE_OK:-false}" == "true" ]]; then
+            # Pull latest from DEV
+            echo "📥 Pull du thème DEV..."
+            rm -rf temp_dev_theme
+            shopify theme pull --store="$SHOPIFY_STORE" --path="temp_dev_theme" --live
+
+            # Push to STAGING
+            echo "📤 Push vers STAGING..."
+            cd temp_dev_theme
+            shopify theme push --store="$SHOPIFY_STORE_STAGING" --live --force
+            cd ..
+
+            echo "✅ DEV → STAGING synchronisé"
+            echo "DEV_TO_STAGING_SUCCESS=true" >> $GITHUB_ENV
+          else
+            echo "❌ Impossible de synchroniser DEV → STAGING (stores indisponibles)"
+            echo "DEV_TO_STAGING_SUCCESS=false" >> $GITHUB_ENV
+          fi
+
+      - name: 🎯 STAGING to PROD Sync
+        if: ${{ inputs.sync_direction == 'staging_to_prod' || inputs.sync_direction == 'full_sync' }}
+        run: |
+          echo "🎯 Synchronisation STAGING → PROD..."
+
+          if [[ "${STAGING_STORE_OK:-false}" == "true" && "${PROD_STORE_OK:-false}" == "true" ]]; then
+            # Confirmation supplémentaire pour PROD
+            echo "⚠️ ATTENTION: Déploiement vers PRODUCTION"
+
+            # Pull latest from STAGING
+            echo "📥 Pull du thème STAGING..."
+            rm -rf temp_staging_theme
+            shopify theme pull --store="$SHOPIFY_STORE_STAGING" --path="temp_staging_theme" --live
+
+            # Push to PROD (avec extra care)
+            echo "📤 Push vers PRODUCTION..."
+            cd temp_staging_theme
+            shopify theme push --store="$SHOPIFY_STORE_PROD" --live --force
+            cd ..
+
+            echo "✅ STAGING → PROD synchronisé"
+            echo "STAGING_TO_PROD_SUCCESS=true" >> $GITHUB_ENV
+          else
+            echo "❌ Impossible de synchroniser STAGING → PROD (stores indisponibles)"
+            echo "STAGING_TO_PROD_SUCCESS=false" >> $GITHUB_ENV
+          fi
+
+      - name: 🔧 Environment Configuration Sync
+        run: |
+          echo "🔧 Synchronisation des configurations..."
+
+          # Vérifier les variables d'environnement critiques
+          config_sync_issues=0
+
+          echo "🔍 Vérification variables critiques..."
+
+          # Liste des variables importantes à synchroniser
+          critical_vars=("GTM_ID" "GA4_ID" "FB_PIXEL_ID" "SENTRY_DSN")
+
+          for var in "${critical_vars[@]}"; do
+            if [[ -z "${!var:-}" ]]; then
+              echo "⚠️ Variable manquante: $var" >> "sync-reports/$TIMESTAMP/config_issues.log"
+              config_sync_issues=$((config_sync_issues + 1))
+            else
+              echo "✅ Variable configurée: $var"
+            fi
+          done
+
+          echo "CONFIG_SYNC_ISSUES=$config_sync_issues" >> $GITHUB_ENV
+          echo "📊 Problèmes de configuration: $config_sync_issues"
+
+      - name: 📋 Environment Health Check
+        run: |
+          echo "📋 Vérification santé des environnements..."
+
+          health_issues=0
+
+          # Tester l'accès aux thèmes sur chaque store
+          if [[ "${DEV_STORE_OK:-false}" == "true" ]]; then
+            echo "🔍 Health check DEV..."
+            theme_count=$(shopify theme list --store="$SHOPIFY_STORE" --json 2>/dev/null | jq length 2>/dev/null || echo "0")
+            echo "DEV themes: $theme_count"
+            if [[ "$theme_count" == "0" ]]; then
+              health_issues=$((health_issues + 1))
+            fi
+          fi
+
+          if [[ "${STAGING_STORE_OK:-false}" == "true" ]]; then
+            echo "🔍 Health check STAGING..."
+            theme_count=$(shopify theme list --store="$SHOPIFY_STORE_STAGING" --json 2>/dev/null | jq length 2>/dev/null || echo "0")
+            echo "STAGING themes: $theme_count"
+            if [[ "$theme_count" == "0" ]]; then
+              health_issues=$((health_issues + 1))
+            fi
+          fi
+
+          if [[ "${PROD_STORE_OK:-false}" == "true" ]]; then
+            echo "🔍 Health check PROD..."
+            theme_count=$(shopify theme list --store="$SHOPIFY_STORE_PROD" --json 2>/dev/null | jq length 2>/dev/null || echo "0")
+            echo "PROD themes: $theme_count"
+            if [[ "$theme_count" == "0" ]]; then
+              health_issues=$((health_issues + 1))
+            fi
+          fi
+
+          echo "HEALTH_ISSUES=$health_issues" >> $GITHUB_ENV
+          echo "📊 Problèmes de santé détectés: $health_issues"
+
+      - name: 📊 Generate Sync Report
+        run: |
+          echo "📊 Génération du rapport de synchronisation..."
+
+          cat > "sync-reports/$TIMESTAMP/SYNC_REPORT.md" << EOF
+          # 🔄 RAPPORT SYNCHRONISATION ENVIRONNEMENTS - TPS
+
+          **Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')
+          **Type:** ${{ inputs.sync_direction || 'scheduled' }}
+          **Environnement Cible:** ${{ inputs.environment_target || 'all' }}
+
+          ## 🏪 Status Stores
+
+          - **DEV Store:** $(if [[ "${DEV_STORE_OK:-false}" == "true" ]]; then echo "✅ Accessible"; else echo "❌ Inaccessible"; fi) ($SHOPIFY_STORE)
+          - **STAGING Store:** $(if [[ "${STAGING_STORE_OK:-false}" == "true" ]]; then echo "✅ Accessible"; else echo "❌ Inaccessible"; fi) ($SHOPIFY_STORE_STAGING)
+          - **PROD Store:** $(if [[ "${PROD_STORE_OK:-false}" == "true" ]]; then echo "✅ Accessible"; else echo "❌ Inaccessible"; fi) ($SHOPIFY_STORE_PROD)
+
+          **Stores Validés:** ${STORES_VALIDATED:-0}/${TOTAL_STORES:-0}
+
+          ## 🔄 Opérations de Synchronisation
+
+          ### DEV → STAGING
+          - **Status:** $(if [[ "${DEV_TO_STAGING_SUCCESS:-false}" == "true" ]]; then echo "✅ Succès"; elif [[ "${{ inputs.sync_direction }}" == *"staging"* ]]; then echo "❌ Échec"; else echo "➖ Non demandé"; fi)
+
+          ### STAGING → PROD
+          - **Status:** $(if [[ "${STAGING_TO_PROD_SUCCESS:-false}" == "true" ]]; then echo "✅ Succès"; elif [[ "${{ inputs.sync_direction }}" == *"prod"* ]]; then echo "❌ Échec"; else echo "➖ Non demandé"; fi)
+
+          ## 🔧 Configuration
+
+          - **Problèmes Config:** ${CONFIG_SYNC_ISSUES:-0}
+          - **Status Config:** $(if [[ "${CONFIG_SYNC_ISSUES:-0}" == "0" ]]; then echo "✅ OK"; else echo "⚠️ À corriger"; fi)
+
+          ## 📋 Santé Environnements
+
+          - **Problèmes Santé:** ${HEALTH_ISSUES:-0}
+          - **Status Global:** $(if [[ "${HEALTH_ISSUES:-0}" == "0" ]]; then echo "✅ Excellent"; else echo "⚠️ Attention requise"; fi)
+
+          ## 💾 Sauvegardes
+
+          - **Backup Créé:** $(if [[ -n "${BACKUP_PATH:-}" ]]; then echo "✅ ${BACKUP_PATH}"; else echo "➖ Non créé"; fi)
+          - **Rétention:** 30 jours
+
+          ## 📅 Planification
+
+          - **Prochaine Sync:** $(date -d '+1 week' '+%Y-%m-%d') (Automatique hebdomadaire)
+          - **Sync Manuel:** Disponible via workflow dispatch
+
+          ## 🎯 Actions Recommandées
+
+          $(if [[ "${STORES_VALIDATED:-0}" != "${TOTAL_STORES:-0}" ]]; then
+            echo "- 🔧 Vérifier les connexions stores défaillantes"
+          fi
+          if [[ "${CONFIG_SYNC_ISSUES:-0}" -gt 0 ]]; then
+            echo "- ⚙️ Corriger les variables d'environnement manquantes"
+          fi
+          if [[ "${HEALTH_ISSUES:-0}" -gt 0 ]]; then
+            echo "- 🏥 Investiguer les problèmes de santé des environnements"
+          fi
+          if [[ "${DEV_TO_STAGING_SUCCESS:-false}" == "false" && "${{ inputs.sync_direction }}" == *"staging"* ]]; then
+            echo "- 🔄 Relancer la synchronisation DEV → STAGING"
+          fi)
+
+          ---
+
+          **Généré automatiquement par GitHub Actions Environment Sync**
+          EOF
+
+      - name: 📤 Upload Sync Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: environment-sync-${{ env.TIMESTAMP }}
+          path: |
+            sync-reports/${{ env.TIMESTAMP }}/
+            ${{ env.BACKUP_PATH || 'backups/empty' }}
+          retention-days: 30
+
+      - name: 📝 Display Sync Summary
+        run: |
+          echo "## 🔄 Synchronisation Environnements" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🗓️ Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**🎯 Type:** ${{ inputs.sync_direction || 'scheduled' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🏪 Status Stores" >> $GITHUB_STEP_SUMMARY
+          echo "- DEV: $(if [[ "${DEV_STORE_OK:-false}" == "true" ]]; then echo "✅"; else echo "❌"; fi) $SHOPIFY_STORE" >> $GITHUB_STEP_SUMMARY
+          echo "- STAGING: $(if [[ "${STAGING_STORE_OK:-false}" == "true" ]]; then echo "✅"; else echo "❌"; fi) $SHOPIFY_STORE_STAGING" >> $GITHUB_STEP_SUMMARY
+          echo "- PROD: $(if [[ "${PROD_STORE_OK:-false}" == "true" ]]; then echo "✅"; else echo "❌"; fi) $SHOPIFY_STORE_PROD" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🔄 Résultats Sync" >> $GITHUB_STEP_SUMMARY
+          echo "- **DEV → STAGING:** $(if [[ "${DEV_TO_STAGING_SUCCESS:-false}" == "true" ]]; then echo "✅ Succès"; elif [[ "${{ inputs.sync_direction }}" == *"staging"* ]]; then echo "❌ Échec"; else echo "➖ Non demandé"; fi)" >> $GITHUB_STEP_SUMMARY
+          echo "- **STAGING → PROD:** $(if [[ "${STAGING_TO_PROD_SUCCESS:-false}" == "true" ]]; then echo "✅ Succès"; elif [[ "${{ inputs.sync_direction }}" == *"prod"* ]]; then echo "❌ Échec"; else echo "➖ Non demandé"; fi)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          total_issues=$((${CONFIG_SYNC_ISSUES:-0} + ${HEALTH_ISSUES:-0}))
+          echo "**📊 Problèmes Détectés:** $total_issues" >> $GITHUB_STEP_SUMMARY
+
+          if [[ $total_issues -eq 0 ]]; then
+            echo "🟢 **Tous les environnements sont synchronisés et sains**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🟡 **Attention requise sur les environnements**" >> $GITHUB_STEP_SUMMARY
+          fi

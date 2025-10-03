@@ -1,0 +1,439 @@
+name: ⚡ Performance Monitoring
+
+on:
+  schedule:
+    # Tous les jours à 08h00 et 20h00 UTC
+    - cron: '0 8,20 * * *'
+  push:
+    paths:
+      - 'assets/**'
+      - 'sections/**'
+      - 'templates/**'
+      - 'layout/**'
+  workflow_dispatch:
+    inputs:
+      monitoring_type:
+        description: "Type de monitoring performance"
+        required: true
+        default: 'complete'
+        type: choice
+        options:
+        - complete
+        - lighthouse_only
+        - speed_test
+        - analytics_performance
+        - mobile_focus
+
+env:
+  LIGHTHOUSE_CI_TOKEN: ${{ secrets.LIGHTHOUSE_CI_TOKEN }}
+  SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+  SITE_URL: https://${{ secrets.SHOPIFY_STORE }}
+
+jobs:
+  performance-monitoring:
+    name: "⚡ Monitoring Performance TPS"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: |
+          npm install -g @lhci/cli lighthouse
+          npm install --save-dev puppeteer
+
+      - name: 🗓️ Generate Performance Report
+        id: timestamp
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          mkdir -p "reports/performance/$TIMESTAMP"
+
+      - name: 🏃‍♂️ Lighthouse Performance Audit
+        if: ${{ inputs.monitoring_type == 'complete' || inputs.monitoring_type == 'lighthouse_only' }}
+        run: |
+          echo "🏃‍♂️ Audit Lighthouse en cours..."
+
+          # Pages principales à auditer
+          pages=(
+            "/"
+            "/collections/all"
+            "/pages/about"
+            "/cart"
+          )
+
+          total_score=0
+          page_count=0
+
+          for page in "${pages[@]}"; do
+            page_name=$(echo "$page" | tr '/' '_' | sed 's/^_//')
+            [[ -z "$page_name" ]] && page_name="homepage"
+
+            echo "🔍 Audit de: $SITE_URL$page"
+
+            # Lancer Lighthouse
+            lighthouse "$SITE_URL$page" \
+              --chrome-flags="--headless --no-sandbox --disable-gpu" \
+              --output=json \
+              --output-path="reports/performance/$TIMESTAMP/lighthouse_${page_name}.json" \
+              --preset=perf \
+              --quiet
+
+            # Extraire les scores
+            if [[ -f "reports/performance/$TIMESTAMP/lighthouse_${page_name}.json" ]]; then
+              performance_score=$(jq -r '.categories.performance.score * 100' "reports/performance/$TIMESTAMP/lighthouse_${page_name}.json" 2>/dev/null || echo "0")
+              accessibility_score=$(jq -r '.categories.accessibility.score * 100' "reports/performance/$TIMESTAMP/lighthouse_${page_name}.json" 2>/dev/null || echo "0")
+              seo_score=$(jq -r '.categories.seo.score * 100' "reports/performance/$TIMESTAMP/lighthouse_${page_name}.json" 2>/dev/null || echo "0")
+
+              echo "📊 ${page_name}: Perf=$performance_score, A11y=$accessibility_score, SEO=$seo_score"
+
+              total_score=$(echo "$total_score + $performance_score" | bc -l 2>/dev/null || echo "$total_score")
+              page_count=$((page_count + 1))
+            fi
+          done
+
+          # Calculer score moyen
+          if [[ $page_count -gt 0 ]]; then
+            avg_score=$(echo "scale=1; $total_score / $page_count" | bc -l 2>/dev/null || echo "0")
+          else
+            avg_score=0
+          fi
+
+          echo "LIGHTHOUSE_AVG_SCORE=$avg_score" >> $GITHUB_ENV
+          echo "PAGES_AUDITED=$page_count" >> $GITHUB_ENV
+          echo "📊 Score Lighthouse moyen: $avg_score"
+
+      - name: 🚀 Speed Test Analysis
+        if: ${{ inputs.monitoring_type == 'complete' || inputs.monitoring_type == 'speed_test' }}
+        run: |
+          echo "🚀 Analyse vitesse de chargement..."
+
+          # Tester vitesse avec curl
+          echo "🔍 Test vitesse homepage..."
+          start_time=$(date +%s%N)
+          curl -s -w "%{time_total}" -o /dev/null "$SITE_URL/" > "reports/performance/$TIMESTAMP/curl_time.txt"
+          end_time=$(date +%s%N)
+
+          load_time=$(cat "reports/performance/$TIMESTAMP/curl_time.txt" 2>/dev/null || echo "0")
+          echo "HOMEPAGE_LOAD_TIME=$load_time" >> $GITHUB_ENV
+
+          # Analyser la taille des ressources
+          echo "📦 Analyse taille des ressources..."
+
+          # Télécharger la page pour analyse
+          curl -s "$SITE_URL/" > "reports/performance/$TIMESTAMP/homepage.html"
+
+          # Compter les ressources
+          css_count=$(grep -o '<link.*\.css' "reports/performance/$TIMESTAMP/homepage.html" | wc -l || echo "0")
+          js_count=$(grep -o '<script.*\.js\|<script[^>]*>' "reports/performance/$TIMESTAMP/homepage.html" | wc -l || echo "0")
+          img_count=$(grep -o '<img\|background-image:' "reports/performance/$TIMESTAMP/homepage.html" | wc -l || echo "0")
+
+          echo "CSS_FILES=$css_count" >> $GITHUB_ENV
+          echo "JS_FILES=$js_count" >> $GITHUB_ENV
+          echo "IMAGES_COUNT=$img_count" >> $GITHUB_ENV
+
+          echo "📊 Ressources: CSS=$css_count, JS=$js_count, Images=$img_count"
+
+      - name: 📱 Mobile Performance Check
+        if: ${{ inputs.monitoring_type == 'complete' || inputs.monitoring_type == 'mobile_focus' }}
+        run: |
+          echo "📱 Test performance mobile..."
+
+          # Lighthouse mobile audit
+          lighthouse "$SITE_URL/" \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json \
+            --output-path="reports/performance/$TIMESTAMP/lighthouse_mobile.json" \
+            --preset=perf \
+            --form-factor=mobile \
+            --throttling-method=simulate \
+            --quiet
+
+          # Extraire métriques mobiles
+          if [[ -f "reports/performance/$TIMESTAMP/lighthouse_mobile.json" ]]; then
+            mobile_score=$(jq -r '.categories.performance.score * 100' "reports/performance/$TIMESTAMP/lighthouse_mobile.json" 2>/dev/null || echo "0")
+            fcp=$(jq -r '.audits["first-contentful-paint"].displayValue' "reports/performance/$TIMESTAMP/lighthouse_mobile.json" 2>/dev/null || echo "N/A")
+            lcp=$(jq -r '.audits["largest-contentful-paint"].displayValue' "reports/performance/$TIMESTAMP/lighthouse_mobile.json" 2>/dev/null || echo "N/A")
+            cls=$(jq -r '.audits["cumulative-layout-shift"].displayValue' "reports/performance/$TIMESTAMP/lighthouse_mobile.json" 2>/dev/null || echo "N/A")
+
+            echo "MOBILE_PERFORMANCE_SCORE=$mobile_score" >> $GITHUB_ENV
+            echo "MOBILE_FCP=$fcp" >> $GITHUB_ENV
+            echo "MOBILE_LCP=$lcp" >> $GITHUB_ENV
+            echo "MOBILE_CLS=$cls" >> $GITHUB_ENV
+
+            echo "📱 Mobile Performance: $mobile_score (FCP: $fcp, LCP: $lcp, CLS: $cls)"
+          fi
+
+      - name: 📊 Analytics Performance Tracking
+        if: ${{ inputs.monitoring_type == 'complete' || inputs.monitoring_type == 'analytics_performance' }}
+        run: |
+          echo "📊 Tracking performance analytics..."
+
+          # Vérifier impact des scripts analytics sur performance
+          scripts_load_time=0
+          analytics_scripts=0
+
+          # Chercher scripts analytics dans la page
+          if [[ -f "reports/performance/$TIMESTAMP/homepage.html" ]]; then
+            # GTM
+            if grep -q "googletagmanager.com" "reports/performance/$TIMESTAMP/homepage.html"; then
+              analytics_scripts=$((analytics_scripts + 1))
+            fi
+
+            # GA4
+            if grep -q "gtag" "reports/performance/$TIMESTAMP/homepage.html"; then
+              analytics_scripts=$((analytics_scripts + 1))
+            fi
+
+            # Facebook Pixel
+            if grep -q "connect.facebook.net" "reports/performance/$TIMESTAMP/homepage.html"; then
+              analytics_scripts=$((analytics_scripts + 1))
+            fi
+
+            # TikTok
+            if grep -q "analytics.tiktok.com" "reports/performance/$TIMESTAMP/homepage.html"; then
+              analytics_scripts=$((analytics_scripts + 1))
+            fi
+          fi
+
+          echo "ANALYTICS_SCRIPTS_COUNT=$analytics_scripts" >> $GITHUB_ENV
+          echo "📊 Scripts analytics détectés: $analytics_scripts"
+
+      - name: 🎯 Performance Optimization Suggestions
+        run: |
+          echo "🎯 Génération de suggestions d'optimisation..."
+
+          suggestions=0
+
+          # Analyser les scores et générer suggestions
+          if [[ "${LIGHTHOUSE_AVG_SCORE:-0}" != "0" ]]; then
+            avg_score=${LIGHTHOUSE_AVG_SCORE}
+            if (( $(echo "$avg_score < 70" | bc -l) )); then
+              suggestions=$((suggestions + 1))
+              echo "⚠️ Score Lighthouse faible ($avg_score)" >> "reports/performance/$TIMESTAMP/suggestions.txt"
+            fi
+          fi
+
+          if [[ "${HOMEPAGE_LOAD_TIME:-0}" != "0" ]]; then
+            load_time=${HOMEPAGE_LOAD_TIME}
+            if (( $(echo "$load_time > 3.0" | bc -l) )); then
+              suggestions=$((suggestions + 1))
+              echo "⚠️ Temps de chargement élevé (${load_time}s)" >> "reports/performance/$TIMESTAMP/suggestions.txt"
+            fi
+          fi
+
+          # Trop de ressources
+          if [[ "${CSS_FILES:-0}" -gt 10 ]]; then
+            suggestions=$((suggestions + 1))
+            echo "⚠️ Trop de fichiers CSS (${CSS_FILES})" >> "reports/performance/$TIMESTAMP/suggestions.txt"
+          fi
+
+          if [[ "${JS_FILES:-0}" -gt 15 ]]; then
+            suggestions=$((suggestions + 1))
+            echo "⚠️ Trop de fichiers JavaScript (${JS_FILES})" >> "reports/performance/$TIMESTAMP/suggestions.txt"
+          fi
+
+          echo "OPTIMIZATION_SUGGESTIONS=$suggestions" >> $GITHUB_ENV
+          echo "🎯 Suggestions d'optimisation: $suggestions"
+
+      - name: 📊 Generate Performance Report
+        run: |
+          echo "📊 Génération du rapport performance..."
+
+          cat > "reports/performance/$TIMESTAMP/PERFORMANCE_REPORT.md" << EOF
+          # ⚡ RAPPORT PERFORMANCE - TPS BASE DEV
+
+          **Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')
+          **Type Monitoring:** ${{ inputs.monitoring_type || 'complete' }}
+          **Site:** $SITE_URL
+
+          ## 🏃‍♂️ Lighthouse Scores
+
+          - **Score Moyen:** ${LIGHTHOUSE_AVG_SCORE:-'Non testé'}
+          - **Pages Auditées:** ${PAGES_AUDITED:-0}
+          - **Performance Mobile:** ${MOBILE_PERFORMANCE_SCORE:-'Non testé'}
+
+          ### 📱 Core Web Vitals Mobile
+          - **First Contentful Paint:** ${MOBILE_FCP:-'Non testé'}
+          - **Largest Contentful Paint:** ${MOBILE_LCP:-'Non testé'}
+          - **Cumulative Layout Shift:** ${MOBILE_CLS:-'Non testé'}
+
+          ## 🚀 Vitesse de Chargement
+
+          - **Homepage Load Time:** ${HOMEPAGE_LOAD_TIME:-'Non testé'}s
+          - **Status:** $(if [[ "${HOMEPAGE_LOAD_TIME:-0}" != "0" ]]; then
+            if (( $(echo "${HOMEPAGE_LOAD_TIME} < 2.0" | bc -l) )); then
+              echo "🟢 Excellent"
+            elif (( $(echo "${HOMEPAGE_LOAD_TIME} < 3.0" | bc -l) )); then
+              echo "🟡 Bon"
+            else
+              echo "🔴 À améliorer"
+            fi
+          else
+            echo "Non testé"
+          fi)
+
+          ## 📦 Analyse des Ressources
+
+          - **Fichiers CSS:** ${CSS_FILES:-0}
+          - **Fichiers JS:** ${JS_FILES:-0}
+          - **Images:** ${IMAGES_COUNT:-0}
+          - **Scripts Analytics:** ${ANALYTICS_SCRIPTS_COUNT:-0}
+
+          ## 📊 Score Global Performance
+
+          $(# Calculer score global
+          total_metrics=0
+          good_metrics=0
+
+          # Lighthouse score
+          if [[ "${LIGHTHOUSE_AVG_SCORE:-0}" != "0" ]]; then
+            total_metrics=$((total_metrics + 1))
+            if (( $(echo "${LIGHTHOUSE_AVG_SCORE} >= 70" | bc -l) )); then
+              good_metrics=$((good_metrics + 1))
+            fi
+          fi
+
+          # Load time
+          if [[ "${HOMEPAGE_LOAD_TIME:-0}" != "0" ]]; then
+            total_metrics=$((total_metrics + 1))
+            if (( $(echo "${HOMEPAGE_LOAD_TIME} <= 3.0" | bc -l) )); then
+              good_metrics=$((good_metrics + 1))
+            fi
+          fi
+
+          # Mobile score
+          if [[ "${MOBILE_PERFORMANCE_SCORE:-0}" != "0" ]]; then
+            total_metrics=$((total_metrics + 1))
+            if (( $(echo "${MOBILE_PERFORMANCE_SCORE} >= 70" | bc -l) )); then
+              good_metrics=$((good_metrics + 1))
+            fi
+          fi
+
+          if [[ $total_metrics -gt 0 ]]; then
+            global_score=$((good_metrics * 100 / total_metrics))
+            echo "**Score Global:** $good_metrics/$total_metrics ($global_score%)"
+
+            if [[ $global_score -ge 80 ]]; then
+              echo "🟢 **EXCELLENT** - Performance optimale"
+            elif [[ $global_score -ge 60 ]]; then
+              echo "🟡 **BON** - Performance satisfaisante"
+            else
+              echo "🔴 **CRITIQUE** - Optimisations urgentes requises"
+            fi
+          else
+            echo "**Score:** Non calculé (aucune métrique disponible)"
+          fi)
+
+          ## 🎯 Recommandations d'Optimisation
+
+          **Suggestions Détectées:** ${OPTIMIZATION_SUGGESTIONS:-0}
+
+          $(if [[ -f "reports/performance/$TIMESTAMP/suggestions.txt" ]]; then
+            cat "reports/performance/$TIMESTAMP/suggestions.txt" | while read line; do
+              echo "- $line"
+            done
+          fi
+
+          # Recommandations génériques
+          echo "### 💡 Optimisations Générales"
+          echo "- Compresser et minifier CSS/JS"
+          echo "- Optimiser et lazy-load les images"
+          echo "- Utiliser un CDN pour les ressources statiques"
+          echo "- Réduire le nombre de scripts tiers"
+          echo "- Implémenter la mise en cache appropriée")
+
+          ## 📈 Tendance Performance
+
+          - **Monitoring:** Bi-quotidien (8h et 20h UTC)
+          - **Alertes:** Score < 60 ou Load Time > 4s
+          - **Historique:** Disponible dans les artifacts
+
+          ## 📅 Planification
+
+          - **Prochain audit:** $(date -d '+12 hours' '+%Y-%m-%d %H:%M') UTC
+          - **Audit complet:** Quotidien
+          - **Monitoring continu:** Sur chaque push
+
+          ---
+
+          **Généré automatiquement par GitHub Actions Performance Monitoring**
+          EOF
+
+      - name: 📤 Upload Performance Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-report-${{ env.TIMESTAMP }}
+          path: reports/performance/${{ env.TIMESTAMP }}/
+          retention-days: 30
+
+      - name: 🚨 Performance Alert Check
+        run: |
+          alert_triggered=false
+
+          # Alertes critiques
+          if [[ "${LIGHTHOUSE_AVG_SCORE:-100}" != "0" && "${LIGHTHOUSE_AVG_SCORE:-100}" != "100" ]]; then
+            if (( $(echo "${LIGHTHOUSE_AVG_SCORE} < 60" | bc -l) )); then
+              echo "🚨 ALERTE: Score Lighthouse critique (${LIGHTHOUSE_AVG_SCORE})" >> $GITHUB_STEP_SUMMARY
+              alert_triggered=true
+            fi
+          fi
+
+          if [[ "${HOMEPAGE_LOAD_TIME:-0}" != "0" ]]; then
+            if (( $(echo "${HOMEPAGE_LOAD_TIME} > 4.0" | bc -l) )); then
+              echo "🚨 ALERTE: Temps de chargement critique (${HOMEPAGE_LOAD_TIME}s)" >> $GITHUB_STEP_SUMMARY
+              alert_triggered=true
+            fi
+          fi
+
+          if [[ "$alert_triggered" == "true" ]]; then
+            echo "**⚠️ Action immédiate recommandée**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: 📝 Display Performance Summary
+        run: |
+          echo "## ⚡ Monitoring Performance TPS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🗓️ Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**🌐 Site:** $SITE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🏃‍♂️ Scores Lighthouse" >> $GITHUB_STEP_SUMMARY
+          echo "- **Desktop Moyen:** ${LIGHTHOUSE_AVG_SCORE:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mobile:** ${MOBILE_PERFORMANCE_SCORE:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pages Auditées:** ${PAGES_AUDITED:-0}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🚀 Vitesse" >> $GITHUB_STEP_SUMMARY
+          echo "- **Load Time:** ${HOMEPAGE_LOAD_TIME:-'N/A'}s" >> $GITHUB_STEP_SUMMARY
+          echo "- **FCP Mobile:** ${MOBILE_FCP:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "- **LCP Mobile:** ${MOBILE_LCP:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📦 Ressources" >> $GITHUB_STEP_SUMMARY
+          echo "- **CSS:** ${CSS_FILES:-0} fichiers" >> $GITHUB_STEP_SUMMARY
+          echo "- **JS:** ${JS_FILES:-0} fichiers" >> $GITHUB_STEP_SUMMARY
+          echo "- **Analytics:** ${ANALYTICS_SCRIPTS_COUNT:-0} scripts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Status global
+          if [[ "${LIGHTHOUSE_AVG_SCORE:-0}" != "0" ]]; then
+            if (( $(echo "${LIGHTHOUSE_AVG_SCORE} >= 80" | bc -l) )); then
+              echo "🟢 **Performance excellente**" >> $GITHUB_STEP_SUMMARY
+            elif (( $(echo "${LIGHTHOUSE_AVG_SCORE} >= 60" | bc -l) )); then
+              echo "🟡 **Performance satisfaisante**" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "🔴 **Performance critique - optimisations requises**" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          if [[ "${OPTIMIZATION_SUGGESTIONS:-0}" -gt 0 ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**💡 ${OPTIMIZATION_SUGGESTIONS} suggestion(s) d'optimisation disponible(s)**" >> $GITHUB_STEP_SUMMARY
+          fi

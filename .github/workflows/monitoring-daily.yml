@@ -2,7 +2,7 @@ name: 📊 Analytics & Monitoring TPS BASE DEV
 
 on:
   schedule:
-    # Tous les jours à 8h00 UTC (9h00 CET) 
+    # Tous les jours à 8h00 UTC (9h00 CET)
     - cron: '0 8 * * *'
   workflow_dispatch:
     inputs:
@@ -32,7 +32,7 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🗓️ Generate Report Timestamp  
+      - name: 🗓️ Generate Report Timestamp
         id: timestamp
         run: |
           TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -48,7 +48,7 @@ jobs:
         if: ${{ inputs.monitoring_type == 'complete' || inputs.monitoring_type == 'uptime_only' }}
         run: |
           echo "🔍 Vérification uptime..."
-          
+
           # Pages principales à tester
           pages=(
             "${SITE_ORIGIN}/"
@@ -56,20 +56,20 @@ jobs:
             "${SITE_ORIGIN}/pages/about"
             "${SITE_ORIGIN}/cart"
           )
-          
+
           uptime_ok=0
           uptime_total=0
-          
+
           for page in "${pages[@]}"; do
             echo "Testing: $page"
             uptime_total=$((uptime_total + 1))
-            
+
             start_time=$(date +%s.%N)
             http_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$page")
             end_time=$(date +%s.%N)
-            
+
             response_time=$(echo "$end_time - $start_time" | bc -l | xargs printf "%.3f")
-            
+
             if [[ "$http_code" == "200" ]]; then
               uptime_ok=$((uptime_ok + 1))
               echo "✅ $page OK ($response_time s)"
@@ -79,7 +79,7 @@ jobs:
               echo "$page,$http_code,$response_time,ERROR" >> "reports/monitoring/$TIMESTAMP/uptime.csv"
             fi
           done
-          
+
           uptime_percent=$(echo "scale=2; $uptime_ok * 100 / $uptime_total" | bc -l)
           echo "UPTIME_PERCENT=$uptime_percent" >> $GITHUB_ENV
           echo "📊 Uptime: $uptime_percent% ($uptime_ok/$uptime_total)"
@@ -88,10 +88,10 @@ jobs:
         if: ${{ inputs.monitoring_type == 'complete' || inputs.monitoring_type == 'analytics_only' }}
         run: |
           echo "📊 Vérification analytics..."
-          
+
           # Vérifier la présence des scripts analytics sur la homepage
           homepage_html=$(curl -s "$SITE_ORIGIN/")
-          
+
           # GTM Check
           if echo "$homepage_html" | grep -q "googletagmanager.com/gtm.js"; then
             echo "GTM_PRESENT=true" >> $GITHUB_ENV
@@ -100,8 +100,8 @@ jobs:
             echo "GTM_PRESENT=false" >> $GITHUB_ENV
             echo "⚠️ Google Tag Manager non détecté"
           fi
-          
-          # GA4 Check  
+
+          # GA4 Check
           if echo "$homepage_html" | grep -q "gtag.*${GA4_ID}"; then
             echo "GA4_PRESENT=true" >> $GITHUB_ENV
             echo "✅ Google Analytics 4 détecté"
@@ -109,7 +109,7 @@ jobs:
             echo "GA4_PRESENT=false" >> $GITHUB_ENV
             echo "⚠️ Google Analytics 4 non détecté"
           fi
-          
+
           # Facebook Pixel Check
           if echo "$homepage_html" | grep -q "connect.facebook.net"; then
             echo "FB_PIXEL_PRESENT=true" >> $GITHUB_ENV
@@ -118,7 +118,7 @@ jobs:
             echo "FB_PIXEL_PRESENT=false" >> $GITHUB_ENV
             echo "⚠️ Facebook Pixel non détecté"
           fi
-          
+
           # Analytics Suite Check
           if echo "$homepage_html" | grep -q "analytics-config-manager"; then
             echo "ANALYTICS_SUITE_PRESENT=true" >> $GITHUB_ENV
@@ -132,10 +132,10 @@ jobs:
         if: ${{ inputs.monitoring_type == 'complete' || inputs.monitoring_type == 'errors_only' }}
         run: |
           echo "🐛 Monitoring des erreurs..."
-          
+
           # Vérifier les erreurs JavaScript sur la homepage
           # Note: Simulation car nous ne pouvons pas exécuter JS dans GitHub Actions
-          
+
           # Vérifier les logs 404 potentiels en testant des ressources communes
           common_files=(
             "/favicon.ico"
@@ -144,13 +144,13 @@ jobs:
             "/assets/application.css"
             "/assets/application.js"
           )
-          
+
           error_count=0
-          
+
           for file in "${common_files[@]}"; do
             url="${SITE_ORIGIN}${file}"
             http_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
-            
+
             if [[ "$http_code" == "404" ]]; then
               error_count=$((error_count + 1))
               echo "❌ 404: $file"
@@ -159,7 +159,7 @@ jobs:
               echo "⚠️ $http_code: $file"
             fi
           done
-          
+
           echo "ERROR_COUNT=$error_count" >> $GITHUB_ENV
           echo "🐛 Erreurs détectées: $error_count"
 
@@ -167,31 +167,31 @@ jobs:
         if: ${{ inputs.monitoring_type == 'complete' }}
         run: |
           echo "🚀 Vérification performance..."
-          
+
           # Test de temps de réponse des pages critiques
           critical_pages=(
             "/"
             "/collections/all"
             "/cart"
           )
-          
+
           total_response_time=0
           page_count=0
-          
+
           for page in "${critical_pages[@]}"; do
             url="${SITE_ORIGIN}${page}"
-            
+
             start_time=$(date +%s.%N)
             curl -s -o /dev/null --max-time 10 "$url"
             end_time=$(date +%s.%N)
-            
+
             response_time=$(echo "$end_time - $start_time" | bc -l)
             total_response_time=$(echo "$total_response_time + $response_time" | bc -l)
             page_count=$((page_count + 1))
-            
+
             echo "⚡ $page: ${response_time}s"
           done
-          
+
           avg_response_time=$(echo "scale=3; $total_response_time / $page_count" | bc -l)
           echo "AVG_RESPONSE_TIME=$avg_response_time" >> $GITHUB_ENV
           echo "📊 Temps de réponse moyen: ${avg_response_time}s"
@@ -199,62 +199,62 @@ jobs:
       - name: 📊 Generate Monitoring Report
         run: |
           echo "📊 Génération du rapport monitoring..."
-          
+
           cat > "reports/monitoring/$TIMESTAMP/MONITORING_REPORT.md" << EOF
           # 📊 RAPPORT MONITORING - TPS BASE DEV
-          
+
           **Date:** $REPORT_DATE
           **Store:** $SHOPIFY_STORE
           **Type:** ${{ inputs.monitoring_type || 'complete' }}
-          
+
           ## 🔍 Uptime & Disponibilité
-          
+
           - **Uptime:** ${UPTIME_PERCENT:-'Non testé'}%
           - **Pages testées:** Accueil, Collections, Panier, À propos
           - **Temps de réponse moyen:** ${AVG_RESPONSE_TIME:-'Non testé'}s
-          
+
           ## 📊 Analytics & Tracking
-          
+
           - **Google Tag Manager:** ${GTM_PRESENT:-'Non testé'}
-          - **Google Analytics 4:** ${GA4_PRESENT:-'Non testé'}  
+          - **Google Analytics 4:** ${GA4_PRESENT:-'Non testé'}
           - **Facebook Pixel:** ${FB_PIXEL_PRESENT:-'Non testé'}
           - **TPS Analytics Suite:** ${ANALYTICS_SUITE_PRESENT:-'Non testé'}
-          
+
           ## 🐛 Monitoring des Erreurs
-          
+
           - **Erreurs 404 détectées:** ${ERROR_COUNT:-'Non testé'}
           - **Status:** $(if [[ "${ERROR_COUNT:-0}" -eq 0 ]]; then echo "✅ Aucune erreur"; else echo "⚠️ Erreurs à investiguer"; fi)
-          
+
           ## 📈 Tendances & Alertes
-          
+
           ### ✅ Points Positifs
-          
+
           $(if [[ "${UPTIME_PERCENT:-0}" -ge 95 ]]; then echo "- ✅ Excellent uptime (≥95%)"; fi)
-          $(if [[ "${GTM_PRESENT}" == "true" ]]; then echo "- ✅ Google Tag Manager fonctionnel"; fi)  
+          $(if [[ "${GTM_PRESENT}" == "true" ]]; then echo "- ✅ Google Tag Manager fonctionnel"; fi)
           $(if [[ "${ANALYTICS_SUITE_PRESENT}" == "true" ]]; then echo "- ✅ Suite analytics TPS active"; fi)
           $(if [[ "${ERROR_COUNT:-0}" -eq 0 ]]; then echo "- ✅ Aucune erreur 404 détectée"; fi)
-          
+
           ### ⚠️ Points d'Attention
-          
+
           $(if [[ "${UPTIME_PERCENT:-100}" -lt 95 ]]; then echo "- ⚠️ Uptime en dessous de 95%"; fi)
           $(if [[ "${GTM_PRESENT}" != "true" ]]; then echo "- ⚠️ Google Tag Manager non détecté"; fi)
           $(if [[ "${GA4_PRESENT}" != "true" ]]; then echo "- ⚠️ Google Analytics 4 non détecté"; fi)
           $(if [[ "${FB_PIXEL_PRESENT}" != "true" ]]; then echo "- ⚠️ Facebook Pixel non détecté"; fi)
           $(if [[ "${ERROR_COUNT:-0}" -gt 0 ]]; then echo "- ⚠️ ${ERROR_COUNT} erreur(s) 404 détectée(s)"; fi)
-          
+
           ## 🎯 Actions Recommandées
-          
+
           1. Surveiller l'uptime quotidiennement
           2. Vérifier les scripts analytics après chaque déploiement
           3. Corriger les erreurs 404 identifiées
           4. Maintenir des temps de réponse < 3 secondes
-          
+
           ---
-          
+
           **Prochain monitoring:** $(date -d '+1 day' '+%Y-%m-%d')
           **Généré automatiquement par GitHub Actions**
           EOF
-          
+
           echo "✅ Rapport monitoring généré"
 
       - name: 📤 Upload Monitoring Report
@@ -264,29 +264,29 @@ jobs:
           path: reports/monitoring/${{ env.TIMESTAMP }}/
           retention-days: 30
 
-      - name: 📝 Display Summary  
+      - name: 📝 Display Summary
         run: |
           echo "## 📊 Rapport Monitoring Quotidien" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**🗓️ Date:** $REPORT_DATE" >> $GITHUB_STEP_SUMMARY
           echo "**🏪 Store:** $SHOPIFY_STORE" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 🔍 Uptime & Performance" >> $GITHUB_STEP_SUMMARY
           echo "- Uptime: ${UPTIME_PERCENT:-'Non testé'}%" >> $GITHUB_STEP_SUMMARY
           echo "- Temps de réponse moyen: ${AVG_RESPONSE_TIME:-'Non testé'}s" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 📊 Analytics" >> $GITHUB_STEP_SUMMARY
           echo "- GTM: $(if [[ "${GTM_PRESENT}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
           echo "- GA4: $(if [[ "${GA4_PRESENT}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
           echo "- Suite TPS: $(if [[ "${ANALYTICS_SUITE_PRESENT}" == "true" ]]; then echo "✅ OK"; else echo "❌ NOK"; fi)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 🐛 Erreurs" >> $GITHUB_STEP_SUMMARY
           echo "- Erreurs 404: ${ERROR_COUNT:-'Non testé'}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ "${ERROR_COUNT:-0}" -gt 0 ]] || [[ "${UPTIME_PERCENT:-100}" -lt 95 ]]; then
             echo "⚠️ **Des problèmes nécessitent votre attention**" >> $GITHUB_STEP_SUMMARY
           else

@@ -1,0 +1,360 @@
+{% comment %}
+  🛡️ CLOUDFLARE TURNSTILE - PROTECTION ANTI-BOT PROFESSIONNELLE
+  =============================================================
+
+  Widget de protection Cloudflare Turnstile intégré de manière native.
+  Alternative moderne à reCAPTCHA avec meilleure UX et performance.
+
+  Fonctionnalités:
+  - Protection intelligente contre les bots
+  - Intégration transparente dans les formulaires
+  - Configuration via theme settings
+  - Callbacks personnalisés pour analytics
+  - Mode GDPR compliant
+
+  Utilisation:
+  {% render 'turnstile', form_id: 'contact-form' %}
+  {% render 'turnstile', form_id: 'newsletter', theme: 'dark' %}
+
+  Développé par Expert Shopify | Version: 2.0.0
+{% endcomment %}
+
+{% liquid
+  # Configuration depuis settings ou paramètres passés
+  assign site_key = settings.turnstile_site_key
+  assign enabled = settings.turnstile_enabled | default: false
+  assign theme_style = theme | default: settings.turnstile_theme | default: 'light'
+  assign widget_size = size | default: settings.turnstile_size | default: 'normal'
+  assign form_identifier = form_id | default: 'default-form'
+
+  # Configuration avancée
+  assign retry_interval = retry | default: 8000
+  assign refresh_expired = refresh | default: 'auto'
+  assign appearance = appearance | default: 'always'
+  assign execution = execution | default: 'render'
+%}
+
+{% if site_key != blank and enabled %}
+  <!-- Turnstile Widget Container -->
+  <div class="turnstile-widget-container" data-form-id="{{ form_identifier }}">
+    {% comment %}Widget Turnstile{% endcomment %}
+    <div
+      class="cf-turnstile"
+      data-sitekey="{{ site_key }}"
+      data-theme="{{ theme_style }}"
+      data-size="{{ widget_size }}"
+      data-callback="onTurnstileSuccess_{{ form_identifier | replace: '-', '_' }}"
+      data-error-callback="onTurnstileError_{{ form_identifier | replace: '-', '_' }}"
+      data-expired-callback="onTurnstileExpired_{{ form_identifier | replace: '-', '_' }}"
+      data-timeout-callback="onTurnstileTimeout_{{ form_identifier | replace: '-', '_' }}"
+      data-retry-interval="{{ retry_interval }}"
+      data-refresh-expired="{{ refresh_expired }}"
+      data-appearance="{{ appearance }}"
+      data-execution="{{ execution }}"
+      {% if settings.analytics_debug_mode %}
+        data-debug="true"
+      {% endif %}
+    ></div>
+
+    {% comment %}Message de statut{% endcomment %}
+    <div class="turnstile-status" id="turnstile-status-{{ form_identifier }}" style="display: none;">
+      <div class="turnstile-loading">
+        <span class="spinner" aria-hidden="true"></span>
+        Vérification de sécurité en cours...
+      </div>
+      <div class="turnstile-success" style="display: none;">
+        <span class="checkmark" aria-hidden="true">✓</span>
+        Vérification réussie !
+      </div>
+      <div class="turnstile-error" style="display: none;">
+        <span class="error-mark" aria-hidden="true">⚠</span>
+        Erreur de vérification. Veuillez réessayer.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      const formId = '{{ form_identifier }}';
+      const debugMode = {{ settings.analytics_debug_mode | default: false | json }};
+
+      // Utilitaires
+      function log(...args) {
+        if (debugMode && typeof console !== 'undefined') {
+          console.log('[Turnstile {{ form_identifier }}]', ...args);
+        }
+      }
+
+      function updateStatus(type, show = true) {
+        const statusContainer = document.getElementById('turnstile-status-' + formId);
+        const statusElements = statusContainer.querySelectorAll('.turnstile-loading, .turnstile-success, .turnstile-error');
+
+        statusElements.forEach(el => el.style.display = 'none');
+
+        if (show) {
+          statusContainer.style.display = 'block';
+          const targetElement = statusContainer.querySelector('.turnstile-' + type);
+          if (targetElement) {
+            targetElement.style.display = 'block';
+          }
+        } else {
+          statusContainer.style.display = 'none';
+        }
+      }
+
+      // Callback de succès
+      window['onTurnstileSuccess_{{ form_identifier | replace: "-", "_" }}'] = function(token) {
+        log('Verification successful, token received');
+        updateStatus('success');
+
+        // Activer le bouton de soumission du formulaire associé
+        const form = document.querySelector('[data-turnstile-form="' + formId + '"]') ||
+                    document.querySelector('#' + formId) ||
+                    document.querySelector('form[name="' + formId + '"]');
+
+        if (form) {
+          const submitBtn = form.querySelector('[type="submit"]');
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('disabled', 'turnstile-disabled');
+            submitBtn.classList.add('turnstile-verified');
+          }
+
+          // Ajouter le token au formulaire
+          let tokenInput = form.querySelector('input[name="cf-turnstile-response"]');
+          if (!tokenInput) {
+            tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = 'cf-turnstile-response';
+            form.appendChild(tokenInput);
+          }
+          tokenInput.value = token;
+        }
+
+        // Analytics tracking
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'turnstile_verification_success', {
+            event_category: 'security',
+            event_label: formId,
+            custom_parameters: {
+              'form_id': formId,
+              'widget_theme': '{{ theme_style }}',
+              'widget_size': '{{ widget_size }}'
+            }
+          });
+        }
+
+        if (typeof fbq !== 'undefined') {
+          fbq('trackCustom', 'TurnstileVerified', {
+            form_id: formId
+          });
+        }
+
+        // Déclencher événement personnalisé
+        document.dispatchEvent(new CustomEvent('turnstileVerified', {
+          detail: {
+            formId: formId,
+            token: token
+          }
+        }));
+
+        // Masquer le statut après 2 secondes
+        setTimeout(() => updateStatus('success', false), 2000);
+      };
+
+      // Callback d'erreur
+      window['onTurnstileError_{{ form_identifier | replace: "-", "_" }}'] = function(errorCode) {
+        log('Verification failed with error:', errorCode);
+        updateStatus('error');
+
+        // Désactiver le bouton de soumission
+        const form = document.querySelector('[data-turnstile-form="' + formId + '"]') ||
+                    document.querySelector('#' + formId);
+        if (form) {
+          const submitBtn = form.querySelector('[type="submit"]');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.classList.add('disabled', 'turnstile-disabled');
+            submitBtn.classList.remove('turnstile-verified');
+          }
+        }
+
+        // Analytics tracking
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'turnstile_verification_error', {
+            event_category: 'security',
+            event_label: formId,
+            custom_parameters: {
+              'error_code': errorCode,
+              'form_id': formId
+            }
+          });
+        }
+
+        // Sentry error reporting
+        if (typeof Sentry !== 'undefined') {
+          Sentry.captureMessage('Turnstile verification failed', {
+            level: 'warning',
+            tags: {
+              form_id: formId,
+              error_code: errorCode
+            }
+          });
+        }
+
+        // Déclencher événement personnalisé
+        document.dispatchEvent(new CustomEvent('turnstileError', {
+          detail: {
+            formId: formId,
+            errorCode: errorCode
+          }
+        }));
+      };
+
+      // Callback d'expiration
+      window['onTurnstileExpired_{{ form_identifier | replace: "-", "_" }}'] = function() {
+        log('Verification expired');
+        updateStatus('error');
+
+        // Analytics tracking
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'turnstile_verification_expired', {
+            event_category: 'security',
+            event_label: formId
+          });
+        }
+      };
+
+      // Callback de timeout
+      window['onTurnstileTimeout_{{ form_identifier | replace: "-", "_" }}'] = function() {
+        log('Verification timeout');
+        updateStatus('error');
+
+        // Analytics tracking
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'turnstile_verification_timeout', {
+            event_category: 'security',
+            event_label: formId
+          });
+        }
+      };
+
+      // Observer le chargement du widget
+      document.addEventListener('DOMContentLoaded', function() {
+        const widget = document.querySelector('[data-form-id="' + formId + '"] .cf-turnstile');
+        if (widget) {
+          // Désactiver le formulaire initialement si Turnstile est requis
+          const form = document.querySelector('[data-turnstile-form="' + formId + '"]') ||
+                      document.querySelector('#' + formId);
+          if (form) {
+            const submitBtn = form.querySelector('[type="submit"]');
+            if (submitBtn) {
+              submitBtn.disabled = true;
+              submitBtn.classList.add('disabled', 'turnstile-disabled');
+
+              // Ajouter un message d'aide
+              if (!submitBtn.getAttribute('data-original-text')) {
+                submitBtn.setAttribute('data-original-text', submitBtn.textContent);
+                submitBtn.textContent = 'Vérification requise...';
+              }
+            }
+          }
+        }
+      });
+
+    })();
+  </script>
+
+  <style>
+    .turnstile-widget-container {
+      margin: 15px 0;
+      text-align: center;
+    }
+
+    .turnstile-status {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .turnstile-loading {
+      color: #666;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+    }
+
+    .turnstile-success {
+      color: #155724;
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+    }
+
+    .turnstile-error {
+      color: #721c24;
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #666;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .checkmark, .error-mark {
+      margin-right: 8px;
+      font-weight: bold;
+    }
+
+    /* Styles pour les boutons désactivés */
+    .turnstile-disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .turnstile-verified {
+      background-color: #28a745 !important;
+      border-color: #28a745 !important;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .cf-turnstile {
+        transform: scale(0.85);
+        transform-origin: center;
+      }
+    }
+
+    {% if theme_style == 'dark' %}
+      .turnstile-loading {
+        color: #ccc;
+        background: #2d3748;
+        border: 1px solid #4a5568;
+      }
+    {% endif %}
+  </style>
+
+{% else %}
+  {% comment %}Fallback si Turnstile n'est pas configuré{% endcomment %}
+  {% if settings.analytics_debug_mode %}
+    <div style="padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; margin: 10px 0;">
+      <strong>Debug:</strong> Turnstile non configuré pour le formulaire "{{ form_identifier }}" <br>
+      <small>Site Key: {{ site_key | default: 'Non défini' }} | Enabled: {{ enabled }}</small>
+    </div>
+  {% endif %}
+{% endif %}

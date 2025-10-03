@@ -1,0 +1,96 @@
+name: 🛍️ Theme Deploy - Shopify
+
+on:
+  workflow_dispatch:
+    inputs:
+      theme_id:
+        description: "ID du thème (optionnel, sinon nouveau thème unpublished)"
+        required: false
+        type: string
+      force_deploy:
+        description: "Force le déploiement même avec des warnings"
+        type: boolean
+        default: false
+        required: false
+      backup_first:
+        description: "Créer un backup avant déploiement"
+        type: boolean
+        default: true
+        required: false
+
+env:
+  SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+  SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
+
+jobs:
+  pre-deploy-backup:
+    name: "💾 Backup Pré-Déploiement"
+    if: ${{ inputs.backup_first == true }}
+    runs-on: ubuntu-latest
+    env:
+      SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 💾 Create Pre-Deploy Backup
+        run: |
+          echo "💾 Sauvegarde avant déploiement..."
+          mkdir -p "backups/pre-deploy/$(date +%Y%m%d_%H%M%S)"
+
+          # Backup thèmes actuels
+          curl -sS -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+            "https://$SHOPIFY_STORE/admin/api/2024-10/themes.json" > "backups/pre-deploy/$(date +%Y%m%d_%H%M%S)/themes.json"
+
+          echo "✅ Backup pré-déploiement créé"
+
+      - name: 📤 Upload Backup
+        uses: actions/upload-artifact@v3
+        with:
+          name: pre-deploy-backup-${{ github.sha }}
+          path: backups/pre-deploy/
+          retention-days: 7
+
+  theme-deploy:
+    name: "🚀 Déploiement Thème Shopify"
+    needs: [pre-deploy-backup]
+    if: ${{ always() && (needs.pre-deploy-backup.result == 'success' || inputs.backup_first == false) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Install Shopify CLI
+        run: npm i -g @shopify/cli @shopify/theme
+
+      - name: 🎨 Theme Check
+        if: ${{ inputs.force_deploy == false }}
+        run: |
+          echo "🔍 Vérification du thème avant déploiement..."
+          shopify theme check --fail-level error
+          echo "✅ Theme check passed"
+
+      - name: 🚀 Deploy to Shopify
+        run: |
+          echo "🚀 Déploiement vers Shopify..."
+
+          if [[ -n "${{ inputs.theme_id }}" ]]; then
+            echo "📌 Déploiement vers thème ID: ${{ inputs.theme_id }}"
+            shopify theme push --theme-id "${{ inputs.theme_id }}" --force
+          else
+            echo "🆕 Création d'un nouveau thème unpublished"
+            shopify theme push --unpublished --force
+          fi
+
+          echo "✅ Déploiement terminé avec succès"
+
+      - name: 📋 Deployment Summary
+        run: |
+          echo "## 🚀 Déploiement Thème Réussi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🏪 Store:** $SHOPIFY_STORE" >> $GITHUB_STEP_SUMMARY
+          echo "**🎨 Thème ID:** ${{ inputs.theme_id || 'Nouveau thème unpublished' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**⏰ Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**💾 Backup:** ${{ inputs.backup_first && '✅ Créé' || '❌ Sauté' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Thème déployé avec succès !**" >> $GITHUB_STEP_SUMMARY

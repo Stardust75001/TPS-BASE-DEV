@@ -1,0 +1,293 @@
+name: 🚨 Security Monitoring
+
+on:
+  schedule:
+    # Tous les jours à 05h00 UTC
+    - cron: '0 5 * * *'
+  push:
+    paths:
+      - 'assets/**'
+      - 'config/**'
+      - 'snippets/**'
+      - 'layout/**'
+      - '.env*'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: "Type de scan sécurité"
+        required: true
+        default: 'complete'
+        type: choice
+        options:
+        - complete
+        - secrets_only
+        - dependencies_only
+        - code_quality
+        - vulnerability_scan
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  security-scan:
+    name: "🚨 Scan Sécurité TPS"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🗓️ Generate Security Report
+        id: timestamp
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          mkdir -p "reports/security/$TIMESTAMP"
+
+      - name: 🔍 Secrets Detection Scan
+        if: ${{ inputs.scan_type == 'complete' || inputs.scan_type == 'secrets_only' }}
+        run: |
+          echo "🔍 Détection des secrets exposés..."
+
+          # Patterns de secrets dangereux
+          cat > "reports/security/$TIMESTAMP/secret_patterns.txt" << EOF
+          sk_live_[0-9a-zA-Z]{24,}
+          sk_test_[0-9a-zA-Z]{24,}
+          pk_live_[0-9a-zA-Z]{24,}
+          pk_test_[0-9a-zA-Z]{24,}
+          AIza[0-9A-Za-z_-]{35}
+          AKIA[0-9A-Z]{16}
+          [0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com
+          shpat_[a-fA-F0-9]{32}
+          shpss_[a-fA-F0-9]{32}
+          shpca_[a-fA-F0-9]{32}
+          shppa_[a-fA-F0-9]{32}
+          EOF
+
+          # Scanner tous les fichiers
+          secrets_found=0
+          while IFS= read -r pattern; do
+            echo "🔎 Recherche pattern: $pattern"
+            if grep -r --exclude-dir=.git --exclude-dir=node_modules --exclude="*.yml" -E "$pattern" . > /dev/null 2>&1; then
+              echo "❌ ALERTE: Pattern détecté - $pattern" >> "reports/security/$TIMESTAMP/secrets_alert.log"
+              secrets_found=$((secrets_found + 1))
+            fi
+          done < "reports/security/$TIMESTAMP/secret_patterns.txt"
+
+          echo "SECRETS_FOUND=$secrets_found" >> $GITHUB_ENV
+
+          if [[ $secrets_found -gt 0 ]]; then
+            echo "❌ $secrets_found secret(s) potentiel(s) détecté(s)"
+          else
+            echo "✅ Aucun secret exposé détecté"
+          fi
+
+      - name: 📦 Dependencies Security Audit
+        if: ${{ inputs.scan_type == 'complete' || inputs.scan_type == 'dependencies_only' }}
+        run: |
+          echo "📦 Audit sécurité des dépendances..."
+
+          if [[ -f "package.json" ]]; then
+            # Installer npm audit si Node.js disponible
+            if command -v npm &> /dev/null; then
+              echo "🔍 Audit npm en cours..."
+              npm audit --audit-level=moderate --json > "reports/security/$TIMESTAMP/npm_audit.json" 2>/dev/null || true
+
+              # Compter les vulnérabilités
+              if [[ -f "reports/security/$TIMESTAMP/npm_audit.json" ]]; then
+                vulnerabilities=$(jq -r '.metadata.vulnerabilities | (.info + .low + .moderate + .high + .critical)' "reports/security/$TIMESTAMP/npm_audit.json" 2>/dev/null || echo "0")
+                echo "NPM_VULNERABILITIES=$vulnerabilities" >> $GITHUB_ENV
+                echo "📊 Vulnérabilités NPM trouvées: $vulnerabilities"
+              else
+                echo "NPM_VULNERABILITIES=unknown" >> $GITHUB_ENV
+              fi
+            else
+              echo "⚠️ npm non disponible pour l'audit"
+              echo "NPM_VULNERABILITIES=unavailable" >> $GITHUB_ENV
+            fi
+          else
+            echo "ℹ️ Pas de package.json trouvé"
+            echo "NPM_VULNERABILITIES=none" >> $GITHUB_ENV
+          fi
+
+      - name: 💻 Code Quality Analysis
+        if: ${{ inputs.scan_type == 'complete' || inputs.scan_type == 'code_quality' }}
+        run: |
+          echo "💻 Analyse qualité du code..."
+
+          # Rechercher code JavaScript potentiellement dangereux
+          dangerous_patterns=0
+
+          echo "🔎 Recherche eval() et Function()..."
+          if grep -r --include="*.js" --include="*.liquid" "\beval\s*(" . > /dev/null 2>&1; then
+            echo "❌ Usage eval() détecté" >> "reports/security/$TIMESTAMP/code_quality.log"
+            dangerous_patterns=$((dangerous_patterns + 1))
+          fi
+
+          if grep -r --include="*.js" --include="*.liquid" "new Function(" . > /dev/null 2>&1; then
+            echo "❌ Usage new Function() détecté" >> "reports/security/$TIMESTAMP/code_quality.log"
+            dangerous_patterns=$((dangerous_patterns + 1))
+          fi
+
+          echo "🔎 Recherche innerHTML non sécurisé..."
+          if grep -r --include="*.js" "innerHTML\s*=" . > /dev/null 2>&1; then
+            echo "⚠️ Usage innerHTML détecté" >> "reports/security/$TIMESTAMP/code_quality.log"
+            dangerous_patterns=$((dangerous_patterns + 1))
+          fi
+
+          echo "🔎 Recherche document.write()..."
+          if grep -r --include="*.js" --include="*.liquid" "document\.write\s*(" . > /dev/null 2>&1; then
+            echo "⚠️ Usage document.write() détecté" >> "reports/security/$TIMESTAMP/code_quality.log"
+            dangerous_patterns=$((dangerous_patterns + 1))
+          fi
+
+          echo "DANGEROUS_PATTERNS=$dangerous_patterns" >> $GITHUB_ENV
+          echo "💻 Patterns dangereux trouvés: $dangerous_patterns"
+
+      - name: 🛡️ Vulnerability Scan
+        if: ${{ inputs.scan_type == 'complete' || inputs.scan_type == 'vulnerability_scan' }}
+        run: |
+          echo "🛡️ Scan de vulnérabilités Shopify..."
+
+          # Vérifier configurations de sécurité Shopify
+          security_issues=0
+
+          echo "🔍 Vérification CSP (Content Security Policy)..."
+          if ! grep -r "Content-Security-Policy\|CSP" . > /dev/null 2>&1; then
+            echo "⚠️ Pas de CSP détecté" >> "reports/security/$TIMESTAMP/vulnerability.log"
+            security_issues=$((security_issues + 1))
+          fi
+
+          echo "🔍 Vérification HTTPS enforcement..."
+          if ! grep -r "force_ssl\|https" . > /dev/null 2>&1; then
+            echo "⚠️ Configuration HTTPS à vérifier" >> "reports/security/$TIMESTAMP/vulnerability.log"
+            security_issues=$((security_issues + 1))
+          fi
+
+          echo "🔍 Vérification protection XSS..."
+          if ! grep -r "X-XSS-Protection\|xss" . > /dev/null 2>&1; then
+            echo "⚠️ Protection XSS à configurer" >> "reports/security/$TIMESTAMP/vulnerability.log"
+            security_issues=$((security_issues + 1))
+          fi
+
+          echo "SECURITY_ISSUES=$security_issues" >> $GITHUB_ENV
+          echo "🛡️ Problèmes sécurité détectés: $security_issues"
+
+      - name: 📊 Generate Security Report
+        run: |
+          echo "📊 Génération du rapport sécurité..."
+
+          # Calculer score sécurité global
+          total_issues=$((${SECRETS_FOUND:-0} + ${NPM_VULNERABILITIES:-0} + ${DANGEROUS_PATTERNS:-0} + ${SECURITY_ISSUES:-0}))
+
+          cat > "reports/security/$TIMESTAMP/SECURITY_REPORT.md" << EOF
+          # 🚨 RAPPORT SÉCURITÉ - TPS BASE DEV
+
+          **Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')
+          **Type Scan:** ${{ inputs.scan_type || 'complete' }}
+          **Commit:** ${GITHUB_SHA:0:8}
+
+          ## 🔍 Détection Secrets
+
+          - **Secrets Exposés:** ${SECRETS_FOUND:-'Non testé'}
+          - **Status:** $(if [[ "${SECRETS_FOUND:-0}" == "0" ]]; then echo "✅ Sécurisé"; else echo "❌ CRITIQUE"; fi)
+
+          ## 📦 Audit Dépendances
+
+          - **Vulnérabilités NPM:** ${NPM_VULNERABILITIES:-'Non testé'}
+          - **Status:** $(if [[ "${NPM_VULNERABILITIES:-0}" == "0" ]] || [[ "${NPM_VULNERABILITIES:-none}" == "none" ]]; then echo "✅ Sécurisé"; elif [[ "${NPM_VULNERABILITIES:-unavailable}" == "unavailable" ]]; then echo "⚠️ Non testé"; else echo "❌ Vulnérabilités détectées"; fi)
+
+          ## 💻 Qualité Code
+
+          - **Patterns Dangereux:** ${DANGEROUS_PATTERNS:-'Non testé'}
+          - **Status:** $(if [[ "${DANGEROUS_PATTERNS:-0}" == "0" ]]; then echo "✅ Sécurisé"; else echo "⚠️ À réviser"; fi)
+
+          ## 🛡️ Analyse Vulnérabilités
+
+          - **Problèmes Sécurité:** ${SECURITY_ISSUES:-'Non testé'}
+          - **Status:** $(if [[ "${SECURITY_ISSUES:-0}" == "0" ]]; then echo "✅ Sécurisé"; else echo "⚠️ Améliorations requises"; fi)
+
+          ## 📊 Score Sécurité Global
+
+          **Total Problèmes:** $total_issues
+
+          $(if [[ $total_issues -eq 0 ]]; then
+            echo "🟢 **EXCELLENT** - Aucun problème détecté"
+          elif [[ $total_issues -le 3 ]]; then
+            echo "🟡 **BON** - Quelques points à améliorer"
+          elif [[ $total_issues -le 7 ]]; then
+            echo "🟠 **MOYEN** - Améliorations recommandées"
+          else
+            echo "🔴 **CRITIQUE** - Action immédiate requise"
+          fi)
+
+          ## 🎯 Actions Recommandées
+
+          $(if [[ "${SECRETS_FOUND:-0}" -gt 0 ]]; then
+            echo "- 🚨 **URGENT:** Retirer les secrets exposés du code"
+          fi
+          if [[ "${NPM_VULNERABILITIES:-0}" -gt 0 ]]; then
+            echo "- 📦 Mettre à jour les dépendances vulnérables"
+          fi
+          if [[ "${DANGEROUS_PATTERNS:-0}" -gt 0 ]]; then
+            echo "- 💻 Réviser le code avec patterns dangereux"
+          fi
+          if [[ "${SECURITY_ISSUES:-0}" -gt 0 ]]; then
+            echo "- 🛡️ Renforcer la configuration sécurité"
+          fi)
+
+          ## 📅 Planification
+
+          - **Prochain scan:** $(date -d '+1 day' '+%Y-%m-%d')
+          - **Scan complet:** Quotidien à 05h00 UTC
+          - **Monitoring:** Automatique sur push
+
+          ---
+
+          **Généré par GitHub Actions Security Monitoring**
+          EOF
+
+          echo "✅ Rapport sécurité généré"
+
+      - name: 🚨 Critical Alert Check
+        run: |
+          if [[ "${SECRETS_FOUND:-0}" -gt 0 ]]; then
+            echo "🚨 ALERTE CRITIQUE: Secrets exposés détectés!" >> $GITHUB_STEP_SUMMARY
+            echo "**Action immédiate requise**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: 📤 Upload Security Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report-${{ env.TIMESTAMP }}
+          path: reports/security/${{ env.TIMESTAMP }}/
+          retention-days: 60
+
+      - name: 📝 Display Security Summary
+        run: |
+          echo "## 🚨 Rapport Sécurité TPS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🗓️ Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**🔄 Commit:** ${GITHUB_SHA:0:8}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🔍 Résultats Scan" >> $GITHUB_STEP_SUMMARY
+          echo "- **Secrets Exposés:** ${SECRETS_FOUND:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Vulnérabilités NPM:** ${NPM_VULNERABILITIES:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Patterns Dangereux:** ${DANGEROUS_PATTERNS:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Problèmes Sécurité:** ${SECURITY_ISSUES:-'N/A'}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          total_issues=$((${SECRETS_FOUND:-0} + ${NPM_VULNERABILITIES:-0} + ${DANGEROUS_PATTERNS:-0} + ${SECURITY_ISSUES:-0}))
+
+          if [[ $total_issues -eq 0 ]]; then
+            echo "🟢 **Status:** EXCELLENT - Aucun problème détecté" >> $GITHUB_STEP_SUMMARY
+          elif [[ $total_issues -le 3 ]]; then
+            echo "🟡 **Status:** BON - $total_issues point(s) à améliorer" >> $GITHUB_STEP_SUMMARY
+          elif [[ $total_issues -le 7 ]]; then
+            echo "🟠 **Status:** MOYEN - $total_issues améliorations recommandées" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🔴 **Status:** CRITIQUE - $total_issues problèmes détectés" >> $GITHUB_STEP_SUMMARY
+          fi
